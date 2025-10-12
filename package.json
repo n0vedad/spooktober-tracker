@@ -1,0 +1,26 @@
+{
+  "name": "spooktober_tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "0BSD",
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "dev": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+    "clean": "rimraf frontend/dist backend/dist",
+    "clean:all": "rimraf frontend/dist backend/dist node_modules frontend/node_modules backend/node_modules shared/node_modules",
+    "build:frontend": "pnpm --filter frontend build",
+    "build:backend": "pnpm --filter backend build",
+    "build": "pnpm build:frontend && pnpm build:backend && pnpm postbuild",
+    "postbuild": "mkdir -p backend/dist/backend/public && cp -r frontend/dist/* backend/dist/backend/public/",
+    "start": "pnpm --filter backend start",
+    "format": "pnpm --filter frontend format && pnpm --filter backend format",
+    "format:check": "pnpm --filter frontend format:check && pnpm --filter backend format:check"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "rimraf": "^6.0.1"
+  },
+  "packageManager": "pnpm@9.12.2+sha512.22721b3a11f81661ae1ec68ce1a7b879425a1ca5b991c975b074ac220b187ce56c708fe5db69f4c962c989452eee76c82877f4ee80f474cebd61ee13461b6228"
+}

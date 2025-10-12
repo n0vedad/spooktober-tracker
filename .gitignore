@@ -1,0 +1,13 @@
+node_modules
+dist
+.claude
+.DS_Store
+.env
+*.log
+.venv
+__pycache__
+*.pyc
+
+# Lock files (we use pnpm-lock.yaml only)
+package-lock.json
+yarn.lock

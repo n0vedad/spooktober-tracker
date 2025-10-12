@@ -1,0 +1,35 @@
+{
+  "name": "frontend",
+  "type": "module",
+  "license": "0BSD",
+  "scripts": {
+    "start": "vite preview --host 0.0.0.0 --port ${PORT}",
+    "dev": "vite",
+    "build": "vite build",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css}\""
+  },
+  "devDependencies": {
+    "@atcute/bluesky": "^3.2.3",
+    "@iconify-json/lucide": "^1.2.68",
+    "@iconify/tailwind4": "^1.0.6",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^24.6.1",
+    "prettier": "^3.6.2",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7",
+    "vite-plugin-solid": "^2.11.9"
+  },
+  "dependencies": {
+    "@atcute/atproto": "^3.1.4",
+    "@atcute/client": "^4.0.3",
+    "@atcute/lexicons": "^1.1.1",
+    "@atcute/oauth-browser-client": "^1.0.26",
+    "solid-js": "^1.9.9",
+    "solid-toast": "^0.5.0"
+  },
+  "packageManager": "pnpm@9.12.2+sha512.22721b3a11f81661ae1ec68ce1a7b879425a1ca5b991c975b074ac220b187ce56c708fe5db69f4c962c989452eee76c82877f4ee80f474cebd61ee13461b6228"
+}
