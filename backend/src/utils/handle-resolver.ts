@@ -58,7 +58,6 @@ export async function getPreviousHandleFromAuditLog(
       );
       return alias ? alias.split("//")[1] : null;
     }
-
     return null;
 
     // Error handling

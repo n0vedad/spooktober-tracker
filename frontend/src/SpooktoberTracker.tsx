@@ -17,15 +17,17 @@ import {
 } from "./api";
 import { formatGermanDateTime } from "./utils/date-formatter";
 import { showError, showSuccess } from "./utils/toast-helpers";
-// ENV import removed: no debug UI in production
 
-// Props required to render the tracker for a given admin/user context.
+/**
+ * Props required to render the tracker for a given admin/user context.
+ *
+ * @property {string} userDID DID of the currently authenticated user driving the tracker.
+ * @property {{ did: string; handle: string }[]} follows Set of follows to monitor, including resolved handles.
+ * @property {() => Promise<void> | void} [onLogout] Optional logout routine provided by parent (App) to terminate session.
+ */
 interface Props {
-  // DID of the currently authenticated user driving the tracker.
   userDID: string;
-  // Set of follows to monitor, including their resolved handles.
   follows: { did: string; handle: string }[];
-  // Optional logout routine provided by parent (App) to terminate session
   onLogout?: () => Promise<void> | void;
 }
 
@@ -50,8 +52,11 @@ export const SpooktoberTracker = (props: Props) => {
   );
   const [showStopConfirmation, setShowStopConfirmation] = createSignal(false);
   const [isStopping, setIsStopping] = createSignal(false);
+
   // Controls "Delete all my data" confirmation UI
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = createSignal(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] =
+    createSignal(false);
+
   // Tracks purge request progress (disables buttons while deleting)
   const [isDeleting, setIsDeleting] = createSignal(false);
   const [secondsUntilRefresh, setSecondsUntilRefresh] = createSignal(30);
@@ -62,6 +67,7 @@ export const SpooktoberTracker = (props: Props) => {
   // Pagination
   const ITEMS_PER_PAGE = 50;
 
+  // Intervals for periodic data refresh and countdown display
   let refreshInterval: number | null = null;
   let countdownInterval: number | null = null;
 
@@ -78,18 +84,23 @@ export const SpooktoberTracker = (props: Props) => {
       let handleChangesCount = 0;
       const handleUpdates = new Map<string, string>();
 
+      // Resolve current handles for all follows in parallel
       const handleCheckPromises = props.follows.map(async (follow) => {
         try {
+          // Lookup latest handle for this DID
           const currentHandle = await resolveHandle(follow.did);
+          // Record handle changes for downstream update notification
           if (currentHandle && currentHandle !== follow.handle) {
             handleChangesCount++;
             handleUpdates.set(follow.did, currentHandle);
           }
         } catch (error) {
+          // Log and continue when a single handle resolution fails
           console.error(`Failed to resolve handle for ${follow.did}:`, error);
         }
       });
 
+      // Wait for all handle checks to complete before proceeding
       await Promise.all(handleCheckPromises);
 
       // Create new follows array with updated handles (immutable pattern)
@@ -98,6 +109,7 @@ export const SpooktoberTracker = (props: Props) => {
         return newHandle ? { ...follow, handle: newHandle } : follow;
       });
 
+      // Notify the user when any handles were updated
       if (handleChangesCount > 0) {
         showSuccess(
           `Updated ${handleChangesCount} username${handleChangesCount > 1 ? "s" : ""} in your follows`,
@@ -121,20 +133,28 @@ export const SpooktoberTracker = (props: Props) => {
           `Monitoring enabled! You're in queue (position ${position}). 24h history will load when a slot is available.`,
           { duration: 6000 },
         );
+
+        // Backfill started: inform user about expected duration
       } else if (result.backfillTriggered) {
         showSuccess(
           `Monitoring enabled! Loading 24h history... This takes ~10 minutes.`,
           { duration: 4000 },
         );
+
+        // Skip backfill: recent backfill already loaded
       } else if (result.backfillSkipReason === "recent_backfill") {
         showSuccess("Monitoring enabled! Recent changes already loaded.", {
           duration: 4000,
         });
+
+        // Skip backfill: main stream catching up; new changes will flow in
       } else if (result.backfillSkipReason === "main_stream_catching_up") {
         showSuccess(
           "Monitoring enabled! New changes will appear automatically.",
           { duration: 4000 },
         );
+
+        // Default success when no backfill or skip reason applies
       } else {
         showSuccess("Monitoring enabled!", { duration: 3000 });
       }
@@ -172,15 +192,17 @@ export const SpooktoberTracker = (props: Props) => {
         `Deleted your data${result.deletedChanges ? ` (${result.deletedChanges} change(s))` : ""}`,
         { duration: 4000 },
       );
-      
+
       // Prefer the parent-provided logout routine to ensure consistent sign-out
       if (props.onLogout) {
         await props.onLogout();
       }
     } catch (err) {
+      // Log unexpected errors and inform the user via toast
       console.error(err);
       showError("Failed to delete your data");
     } finally {
+      // Always reset deletion state and close the confirmation dialog
       setIsDeleting(false);
       setShowDeleteConfirmation(false);
     }
@@ -193,10 +215,16 @@ export const SpooktoberTracker = (props: Props) => {
    * @returns Array of deduplicated changes.
    */
   const deduplicateChanges = (changes: ProfileChange[]): ProfileChange[] => {
+    // Track the most recent qualifying change per DID
     const latestByDID = new Map<string, ProfileChange>();
+
+    // Walk all changes and keep only those with an old value (a real change)
     changes.forEach((change) => {
       if (change.old_display_name || change.old_avatar || change.old_handle) {
+        // Check the previously kept change for this DID
         const existing = latestByDID.get(change.did);
+
+        // Keep if first occurrence or if this change is newer
         if (
           !existing ||
           new Date(change.changed_at) > new Date(existing.changed_at)
@@ -205,6 +233,7 @@ export const SpooktoberTracker = (props: Props) => {
         }
       }
     });
+    // Return the deduplicated set ordered by map insertion
     return Array.from(latestByDID.values());
   };
 
@@ -227,6 +256,7 @@ export const SpooktoberTracker = (props: Props) => {
       // Invalidate cached history to ensure fresh data on next expand
       setHistory(new Map());
 
+      // Mark known changes as loaded to toggle UI state
       setKnownChangesLoaded(true);
     } catch (err) {
       showError(
@@ -292,6 +322,7 @@ export const SpooktoberTracker = (props: Props) => {
       setServerDisconnected(true);
       // Stop auto-refresh if server is down
       stopAutoRefresh();
+      // Inform the user about the lost connection and suggest next steps
       showError(
         "Connection lost. Please check your internet connection and refresh the page.",
         {
@@ -299,6 +330,7 @@ export const SpooktoberTracker = (props: Props) => {
         },
       );
     } finally {
+      // Always clear the loading flag when leaving this routine
       setIsLoadingChanges(false);
     }
   };
@@ -436,7 +468,7 @@ export const SpooktoberTracker = (props: Props) => {
       // Stop auto-refresh
       stopAutoRefresh();
 
-      // Reset state
+      // Reset states & error handling
       setMonitoringEnabled(false);
       setHasEnabledMonitoring(false);
       setChanges([]);
@@ -480,8 +512,6 @@ export const SpooktoberTracker = (props: Props) => {
       setIsCheckingMonitoring(false);
     }
   });
-
-  // Debug helpers removed
 
   // Cleanup intervals on component unmount
   onCleanup(() => {
@@ -648,6 +678,7 @@ export const SpooktoberTracker = (props: Props) => {
             </Show>
           </Show>
 
+          {/* Empty state when no known changes are available */}
           <Show when={changes().length === 0}>
             <div class="mb-4 rounded-lg border border-purple-400 bg-purple-50 p-4 dark:border-purple-600 dark:bg-purple-900/20">
               <p class="text-sm text-purple-700 dark:text-purple-400">
@@ -657,6 +688,7 @@ export const SpooktoberTracker = (props: Props) => {
             </div>
           </Show>
 
+          {/* Back button: reset view to initial state */}
           <button
             onclick={reset}
             class="w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
@@ -699,12 +731,17 @@ export const SpooktoberTracker = (props: Props) => {
                     ? "🟢 Monitoring Active - View Changes"
                     : `Enable Monitoring for ${props.follows.length} Follows`}
           </button>
+
           {/* Delete confirmation shown directly above the delete button */}
           <Show when={showDeleteConfirmation()}>
             <div class="mt-4 rounded-lg border border-red-400 bg-red-50 p-4 dark:border-red-600 dark:bg-red-900/20">
-              <h3 class="mb-2 font-bold text-red-800 dark:text-red-300">⚠️ Delete all your data?</h3>
+              <h3 class="mb-2 font-bold text-red-800 dark:text-red-300">
+                ⚠️ Delete all your data?
+              </h3>
               <p class="mb-4 text-sm text-red-700 dark:text-red-400">
-                This stops monitoring and removes your data (including your own profile change history) from the community database. This action cannot be undone.
+                This stops monitoring and removes your data (including your own
+                profile change history) from the community database. This action
+                cannot be undone.
               </p>
               <div class="flex flex-col gap-2 sm:flex-row">
                 <button
@@ -724,13 +761,13 @@ export const SpooktoberTracker = (props: Props) => {
               </div>
             </div>
           </Show>
-          {/* Debug panel removed */}
+
           {/* Show purge button directly under the CTA when monitoring was previously enabled */}
           <Show when={hasEnabledMonitoring()}>
             <button
               onclick={requestDeleteAllData}
               class="mt-4 w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
-              >
+            >
               Delete all my data
             </button>
           </Show>
@@ -787,6 +824,7 @@ export const SpooktoberTracker = (props: Props) => {
             >
               Stop Monitoring
             </button>
+
             {/* No purge button in active (view changes) state by request */}
             <button
               onclick={reset}

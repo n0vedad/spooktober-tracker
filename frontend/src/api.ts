@@ -42,6 +42,7 @@ export async function getChangeHistory(
   did: string,
   userDID: string,
 ): Promise<ProfileChange[]> {
+  // Request detailed change history for the DID from the backend.
   const response = await fetch(
     `${API_BASE}/changes/${encodeURIComponent(did)}/history`,
     {
@@ -172,6 +173,7 @@ export async function getMonitoringStatus(userDID: string): Promise<{
   const response = await fetch(`${API_BASE}/monitoring/status`, {
     headers: buildHeaders(userDID),
   });
+
   // Parse JSON payload containing admin metrics
   const data: APIResponse<{
     mainStream: {
@@ -194,6 +196,7 @@ export async function getMonitoringStatus(userDID: string): Promise<{
     tempStreamUsers: Array<{ did: string; handle: string | null }>;
   }> = await response.json();
 
+  // Validate success and data presence before returning snapshot
   if (!data.success || !data.data) {
     throw new Error(data.error || "Failed to get monitoring status");
   }
@@ -210,13 +213,15 @@ export async function getMonitoringStatus(userDID: string): Promise<{
 export async function triggerManualBackfill(
   adminDID: string,
   targetDID: string,
+  options?: { restart?: boolean },
 ): Promise<{ queued: boolean; position?: number; message: string }> {
   // Issue POST to trigger a temporary 24h backfill for the target user
   const response = await fetch(
     `${API_BASE}/monitoring/backfill/${encodeURIComponent(targetDID)}`,
     {
       method: "POST",
-      headers: buildHeaders(adminDID),
+      headers: buildHeaders(adminDID, { "Content-Type": "application/json" }),
+      body: JSON.stringify({ restart: Boolean(options?.restart) }),
     },
   );
 
@@ -340,7 +345,10 @@ export async function disableMonitoring(userDID: string): Promise<void> {
  * - delete the user's own profile_changes
  * - clear backfill state
  */
-export async function purgeMyData(userDID: string): Promise<{ deletedChanges: number }> {
+export async function purgeMyData(
+  userDID: string,
+): Promise<{ deletedChanges: number }> {
+  // Issue DELETE to purge all stored data for this user.
   const response = await fetch(
     `${API_BASE}/monitoring/purge/${encodeURIComponent(userDID)}`,
     {
@@ -350,7 +358,8 @@ export async function purgeMyData(userDID: string): Promise<{ deletedChanges: nu
   );
 
   // Expect backend acknowledgement with optional deleted change count
-  const data: APIResponse<{ message: string; deletedChanges: number }> = await response.json();
+  const data: APIResponse<{ message: string; deletedChanges: number }> =
+    await response.json();
   if (!data.success || !data.data) {
     throw new Error(data.error || "Failed to purge user data");
   }

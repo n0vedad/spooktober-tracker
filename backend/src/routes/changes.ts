@@ -110,6 +110,7 @@ router.post("/", async (req, res) => {
       change.old_display_name || change.new_display_name;
     const hasAvatarChange = change.old_avatar || change.new_avatar;
 
+    // Require at least one actual change field to be present
     if (!hasHandleChange && !hasDisplayNameChange && !hasAvatarChange) {
       const response: APIResponse<never> = {
         success: false,

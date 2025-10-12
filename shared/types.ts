@@ -3,42 +3,48 @@
  * Used by both frontend and backend
  */
 
+/**
+ * Profile-change event for a DID.
+ *
+ * Captures handle and profile updates with old/new values when applicable.
+ * The `change_type` distinguishes handle vs profile vs combined changes.
+ * `changed_at` is an ISO-8601 timestamp of observation.
+ */
 export interface ProfileChange {
-  /** DID whose profile changed. */
   did: string;
-  /** Most recent handle for this DID (used for all change types). */
   handle: string | null;
-  /** Previous handle (only set for handle changes, otherwise null). */
   old_handle: string | null;
-  /** New handle (only set for handle changes, otherwise null). */
   new_handle: string | null;
-  /** Previous display name. */
   old_display_name: string | null;
-  /** Updated display name. */
   new_display_name: string | null;
-  /** Previous avatar CID. */
   old_avatar: string | null;
-  /** Updated avatar CID. */
   new_avatar: string | null;
-  /** Type of change: handle, profile, or combined. */
   change_type: 'handle' | 'profile' | 'combined';
-  changed_at: string; // ISO timestamp
+  changed_at: string;
 }
 
+/**
+ * Generic API response envelope.
+ * Includes a success flag, with optional data or error message.
+ */
 export interface APIResponse<T> {
-  /** Indicates whether the request succeeded. */
   success: boolean;
   data?: T;
   error?: string;
 }
 
+/**
+ * Response body for listing profile changes.
+ */
 export interface GetChangesResponse {
-  /** List of matching profile-change entries. */
   changes: ProfileChange[];
 }
 
+/**
+ * Request body to submit a profile-change record.
+ * Only include fields that changed; `did` is required.
+ */
 export interface SubmitChangeRequest {
-  /** DID whose profile change is being submitted. */
   did: string;
   handle?: string;
   old_handle?: string;

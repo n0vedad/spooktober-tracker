@@ -78,6 +78,7 @@ export async function fetchFollowsFromBluesky(
         break;
       }
 
+      // Decode JSON body and assert the expected response shape
       const data = (await response.json()) as GetFollowsResponse;
 
       // Add follows to array
@@ -127,6 +128,8 @@ export async function fetchFollowsForUsers(
     results.set(userDID, follows);
   });
 
+  // Wait for all parallel fetches to finish
   await Promise.all(promises);
+  // Return mapping: user DID -> follows array
   return results;
 }

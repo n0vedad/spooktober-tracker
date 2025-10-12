@@ -274,7 +274,6 @@ export async function isDuplicateChange(
       newHandle: duplicateCheck.rows[0].new_handle ?? null,
     };
   }
-
   return null;
 }
 
@@ -434,6 +433,7 @@ export async function getLastKnownHandle(did: string): Promise<string | null> {
     return null;
   }
 
+  // Prefer the most recent explicit new_handle; otherwise fall back to handle
   return result.rows[0].new_handle || result.rows[0].handle;
 }
 
@@ -541,7 +541,6 @@ export async function getMonitoredFollowsBatch(
       map.set(userDID, []);
     }
   }
-
   return map;
 }
 

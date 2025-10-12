@@ -29,7 +29,6 @@ export const requireAuth = (
     };
     return res.status(401).json(response);
   }
-
   next();
 };
 
@@ -56,6 +55,5 @@ export const requireAdmin = (
     };
     return res.status(403).json(response);
   }
-
   next();
 };

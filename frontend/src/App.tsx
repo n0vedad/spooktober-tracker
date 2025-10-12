@@ -52,10 +52,17 @@ type Notice = {
   tone: "info" | "error";
 };
 
-let rpc: Client; // AT Protocol client configured after authentication.
-let agent: OAuthUserAgent | undefined; // OAuth agent managing token refresh and requests.
-let agentDID = ""; // DID of the currently authenticated user.
-let credentialManager: CredentialManager | undefined; // App-password credential manager.
+/**
+ * Auth state for the current session:
+ * - rpc: AT Protocol client (initialized after auth)
+ * - agent: OAuth agent handling tokens/requests
+ * - agentDID: DID of the authenticated user
+ * - credentialManager: App‑password credential manager
+ */
+let rpc: Client;
+let agent: OAuthUserAgent | undefined;
+let agentDID = "";
+let credentialManager: CredentialManager | undefined;
 
 /**
  * Encapsulates login state, handles OAuth redirect flow and app-password login.
@@ -447,225 +454,233 @@ const App = () => {
           },
         }}
       />
-      <div class="min-h-screen flex flex-col text-slate-900 dark:text-slate-100">
+      <div class="flex min-h-screen flex-col text-slate-900 dark:text-slate-100">
         <main class="flex-1">
           <div class="m-5 flex flex-col items-center">
             <div class="w-full max-w-2xl px-4">
-          <div class="mb-2 flex items-center">
-            <div class="basis-1/3">
-              <div
-                class="flex w-fit cursor-pointer items-center"
-                title="Theme"
-                onclick={() => {
-                  setTheme(theme() === "light" ? "dark" : "light");
-                  if (theme() === "dark")
-                    document.documentElement.classList.add("dark");
-                  else document.documentElement.classList.remove("dark");
-                  localStorage.theme = theme();
-                }}
-              >
-                {theme() === "dark" ? (
-                  <div class="icon-[lucide--moon] text-lg sm:text-xl" />
-                ) : (
-                  <div class="icon-[lucide--sun] text-lg sm:text-xl" />
-                )}
-              </div>
-            </div>
-            <div class="basis-1/3 text-center text-lg font-bold sm:text-xl">
-              🎃 Spooktober Tracker
-            </div>
-            <div class="flex basis-1/3 justify-end gap-x-2">
-              <Show when={login.loginState()}>
-                <button
-                  class="flex cursor-pointer items-center justify-center rounded px-2 py-1 text-slate-700 dark:text-slate-100"
-                  title="Logout"
-                  onclick={login.logoutBsky}
-                >
-                  <div class="icon-[lucide--door-open] text-lg sm:text-xl" />
-                </button>
-              </Show>
-            </div>
-          </div>
-          <div class="mb-4 flex flex-col items-center">
-            <Show
-              when={
-                !login.loginState() && login.notice()?.message !== "Loading..."
-              }
-            >
-              <form
-                class="flex w-full max-w-md flex-col px-4"
-                onsubmit={(e) => e.preventDefault()}
-              >
-                <label for="handle" class="ml-0.5 text-sm">
-                  Handle
-                </label>
-                <input
-                  type="text"
-                  id="handle"
-                  placeholder="user.bsky.social"
-                  class="dark:bg-dark-100 mb-3 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onInput={(e) => login.setLoginInput(e.currentTarget.value)}
-                />
-                <label for="password" class="ml-0.5 text-sm">
-                  App Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  placeholder="supersecretpassword"
-                  class="dark:bg-dark-100 mb-4 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onInput={(e) => login.setPassword(e.currentTarget.value)}
-                />
-                <button
-                  onclick={() => login.loginBsky(login.loginInput())}
-                  class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
-                >
-                  Login
-                </button>
-              </form>
-
-              {(() => {
-                const current = login.notice();
-                if (!current || current.message === "Loading...") return null;
-
-                const isInfo = current.tone === "info";
-                const base =
-                  "mx-4 mt-3 max-w-2xl rounded-lg border px-3 py-2 text-sm font-medium text-center";
-                const info =
-                  " border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200";
-                const error =
-                  " border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200";
-
-                return (
-                  <div class={base + (isInfo ? info : error)}>
-                    {current.message}
+              <div class="mb-2 flex items-center">
+                <div class="basis-1/3">
+                  <div
+                    class="flex w-fit cursor-pointer items-center"
+                    title="Theme"
+                    onclick={() => {
+                      setTheme(theme() === "light" ? "dark" : "light");
+                      if (theme() === "dark")
+                        document.documentElement.classList.add("dark");
+                      else document.documentElement.classList.remove("dark");
+                      localStorage.theme = theme();
+                    }}
+                  >
+                    {theme() === "dark" ? (
+                      <div class="icon-[lucide--moon] text-lg sm:text-xl" />
+                    ) : (
+                      <div class="icon-[lucide--sun] text-lg sm:text-xl" />
+                    )}
                   </div>
-                );
-              })()}
-
-              {/* Login Info Note */}
-              <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
-                <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
-                  ℹ️ How to Login
-                </h4>
-                <div class="space-y-2 text-xs text-blue-900 sm:text-sm dark:text-blue-200">
-                  <p>
-                    <strong>Option 1: App Password</strong>
-                    <br />
-                    Enter your Bluesky handle and an app password. You can
-                    create an app password in your Bluesky settings under "App
-                    Passwords". This is safer than using your main password.
-                  </p>
-                  <p>
-                    <strong>Option 2: OAuth Login (Recommended)</strong>
-                    <br />
-                    Leave the password field empty and click "Login". You'll be
-                    redirected to Bluesky to authorize this app. This is the
-                    most secure option as you never share your password.
-                  </p>
+                </div>
+                <div class="basis-1/3 text-center text-lg font-bold sm:text-xl">
+                  🎃 Spooktober Tracker
+                </div>
+                <div class="flex basis-1/3 justify-end gap-x-2">
+                  <Show when={login.loginState()}>
+                    <button
+                      class="flex cursor-pointer items-center justify-center rounded px-2 py-1 text-slate-700 dark:text-slate-100"
+                      title="Logout"
+                      onclick={login.logoutBsky}
+                    >
+                      <div class="icon-[lucide--door-open] text-lg sm:text-xl" />
+                    </button>
+                  </Show>
                 </div>
               </div>
-              <div class="mx-4 mt-3 max-w-2xl rounded-lg border border-purple-300 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/30">
-                <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
-                  ❓ FAQ
-                </h4>
-                <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
-                  <p>
-                    <strong>What is Spooktober Tracker?</strong>
-                    <br />A community tool that monitors Bluesky profile changes
-                    during spooky season (October). When you enable monitoring,
-                    we track changes to handles, display names, and avatars for
-                    all the accounts you follow - helping everyone see who's
-                    getting spooky! 🎃
-                  </p>
-                  <p>
-                    <strong>How does monitoring work?</strong>
-                    <br />
-                    After enabling monitoring, our server watches your follows
-                    in real-time via Bluesky's Jetstream API.{" "}
-                    <strong>
-                      Due limitations on Bluesky side only last 24 hours per
-                      user could be catched up.
-                    </strong>{" "}
-                    When someone changes their profile, it's logged instantly.
-                    The server runs 24/7, so you don't need to keep this page
-                    open - changes are tracked automatically!
-                  </p>
-                  <p>
-                    <strong>What data is collected?</strong>
-                    <br />
-                    We only store <em>publicly visible</em> profile changes:
-                    handles (e.g., @user.bsky.social), display names, and avatar
-                    references. We never store passwords, private posts, or
-                    OAuth tokens. All monitoring data is shared across the
-                    community - when you enable monitoring, you help everyone
-                    track spooky changes!
-                  </p>
-                  <p>
-                    <strong>Can I see changes even without monitoring?</strong>
-                    <br />
-                    Yes! Click "Load Known Spooktober Changes" to see all
-                    profile changes tracked by the community. You only need to
-                    enable monitoring if you want to contribute your follows to
-                    the tracking database.
-                  </p>
-                  <p>
-                    <strong>How do I stop monitoring?</strong>
-                    <br />
-                    Click the "Stop Monitoring" button anytime. Your follows
-                    will no longer be tracked, but existing change history stays
-                    in the database to help the community. You can re-enable
-                    monitoring later if you want!
-                  </p>
-                  <p>
-                    <strong>Is this safe?</strong>
-                    <br />
-                    Yes! We use Bluesky's official OAuth for login (if you dont
-                    use app passwords) - your password never touches our
-                    servers. OAuth tokens stay in your browser's secure storage.
-                    We only read public profile data that anyone on Bluesky can
-                    see.
-                  </p>
+              <div class="mb-4 flex flex-col items-center">
+                <Show
+                  when={
+                    !login.loginState() &&
+                    login.notice()?.message !== "Loading..."
+                  }
+                >
+                  <form
+                    class="flex w-full max-w-md flex-col px-4"
+                    onsubmit={(e) => e.preventDefault()}
+                  >
+                    <label for="handle" class="ml-0.5 text-sm">
+                      Handle
+                    </label>
+                    <input
+                      type="text"
+                      id="handle"
+                      placeholder="user.bsky.social"
+                      class="dark:bg-dark-100 mb-3 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onInput={(e) =>
+                        login.setLoginInput(e.currentTarget.value)
+                      }
+                    />
+                    <label for="password" class="ml-0.5 text-sm">
+                      App Password
+                    </label>
+                    <input
+                      type="password"
+                      id="password"
+                      placeholder="supersecretpassword"
+                      class="dark:bg-dark-100 mb-4 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onInput={(e) => login.setPassword(e.currentTarget.value)}
+                    />
+                    <button
+                      onclick={() => login.loginBsky(login.loginInput())}
+                      class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
+                    >
+                      Login
+                    </button>
+                  </form>
+
+                  {(() => {
+                    const current = login.notice();
+                    if (!current || current.message === "Loading...")
+                      return null;
+
+                    const isInfo = current.tone === "info";
+                    const base =
+                      "mx-4 mt-3 max-w-2xl rounded-lg border px-3 py-2 text-sm font-medium text-center";
+                    const info =
+                      " border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200";
+                    const error =
+                      " border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200";
+
+                    return (
+                      <div class={base + (isInfo ? info : error)}>
+                        {current.message}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Login Info Note */}
+                  <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
+                    <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
+                      ℹ️ How to Login
+                    </h4>
+                    <div class="space-y-2 text-xs text-blue-900 sm:text-sm dark:text-blue-200">
+                      <p>
+                        <strong>Option 1: App Password</strong>
+                        <br />
+                        Enter your Bluesky handle and an app password. You can
+                        create an app password in your Bluesky settings under
+                        "App Passwords". This is safer than using your main
+                        password.
+                      </p>
+                      <p>
+                        <strong>Option 2: OAuth Login (Recommended)</strong>
+                        <br />
+                        Leave the password field empty and click "Login". You'll
+                        be redirected to Bluesky to authorize this app. This is
+                        the most secure option as you never share your password.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* FAQ */}
+                  <div class="mx-4 mt-3 max-w-2xl rounded-lg border border-purple-300 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/30">
+                    <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
+                      ❓ FAQ
+                    </h4>
+                    <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
+                      <p>
+                        <strong>What is Spooktober Tracker?</strong>
+                        <br />A community tool that monitors Bluesky profile
+                        changes during spooky season (October). When you enable
+                        monitoring, we track changes to handles, display names,
+                        and avatars for all the accounts you follow - helping
+                        everyone see who's getting spooky! 🎃
+                      </p>
+                      <p>
+                        <strong>How does monitoring work?</strong>
+                        <br />
+                        After enabling monitoring, our server watches your
+                        follows in real-time via Bluesky's Jetstream API.{" "}
+                        <strong>
+                          Due limitations on Bluesky side only last 24 hours per
+                          user could be catched up.
+                        </strong>{" "}
+                        When someone changes their profile, it's logged
+                        instantly. The server runs 24/7, so you don't need to
+                        keep this page open - changes are tracked automatically!
+                      </p>
+                      <p>
+                        <strong>What data is collected?</strong>
+                        <br />
+                        We only store <em>publicly visible</em> profile changes:
+                        handles (e.g., @user.bsky.social), display names, and
+                        avatar references. We never store passwords, private
+                        posts, or OAuth tokens. All monitoring data is shared
+                        across the community - when you enable monitoring, you
+                        help everyone track spooky changes!
+                      </p>
+                      <p>
+                        <strong>
+                          Can I see changes even without monitoring?
+                        </strong>
+                        <br />
+                        Yes! Click "Load Known Spooktober Changes" to see all
+                        profile changes tracked by the community. You only need
+                        to enable monitoring if you want to contribute your
+                        follows to the tracking database.
+                      </p>
+                      <p>
+                        <strong>How do I stop monitoring?</strong>
+                        <br />
+                        Click the "Stop Monitoring" button anytime. Your follows
+                        will no longer be tracked, but existing change history
+                        stays in the database to help the community. You can
+                        re-enable monitoring later if you want!
+                      </p>
+                      <p>
+                        <strong>Is this safe?</strong>
+                        <br />
+                        Yes! We use Bluesky's official OAuth for login (if you
+                        dont use app passwords) - your password never touches
+                        our servers. OAuth tokens stay in your browser's secure
+                        storage. We only read public profile data that anyone on
+                        Bluesky can see.
+                      </p>
+                    </div>
+                  </div>
+                </Show>
+                <Show when={login.loginState() && login.handle()}>
+                  <div class="mb-4 text-center text-sm sm:text-base">
+                    Logged in as @{login.handle()}
+                  </div>
+                </Show>
+                <Show when={login.notice()?.message === "Loading..."}>
+                  <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
+                    {login.notice()?.message}
+                  </div>
+                </Show>
+              </div>
+
+              <Show when={login.loginState()}>
+                <div class="flex flex-col items-center">
+                  {/* Admin Panel */}
+                  <Show when={agentDID === ADMIN_DID}>
+                    <AdminPanel userDID={agentDID} />
+                  </Show>
+
+                  <Show when={fetch.loading()}>
+                    <div class="m-3">Loading follows...</div>
+                  </Show>
+
+                  {/* Spooktober Tracker */}
+                  <Show when={!fetch.loading() && fetch.follows().length > 0}>
+                    <SpooktoberTracker
+                      userDID={agentDID}
+                      follows={fetch.follows()}
+                      onLogout={login.logoutBsky}
+                    />
+                  </Show>
                 </div>
-              </div>
-            </Show>
-            <Show when={login.loginState() && login.handle()}>
-              <div class="mb-4 text-center text-sm sm:text-base">
-                Logged in as @{login.handle()}
-              </div>
-            </Show>
-            <Show when={login.notice()?.message === "Loading..."}>
-              <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
-                {login.notice()?.message}
-              </div>
-            </Show>
-          </div>
-
-          <Show when={login.loginState()}>
-            <div class="flex flex-col items-center">
-              {/* Admin Panel */}
-              <Show when={agentDID === ADMIN_DID}>
-                <AdminPanel userDID={agentDID} />
-              </Show>
-
-              <Show when={fetch.loading()}>
-                <div class="m-3">Loading follows...</div>
-              </Show>
-
-              {/* Spooktober Tracker */}
-              <Show when={!fetch.loading() && fetch.follows().length > 0}>
-                <SpooktoberTracker
-                  userDID={agentDID}
-                  follows={fetch.follows()}
-                  // Provide logout routine so children can terminate session cleanly
-                  onLogout={login.logoutBsky}
-                />
               </Show>
             </div>
-          </Show>
+            {/* Close outer content wrapper */}
           </div>
-          {/* Close outer content wrapper */}
-        </div>
         </main>
         <footer class="mt-auto w-full border-t border-gray-200 bg-white/70 dark:border-gray-700 dark:bg-black/40">
           <div class="mx-auto max-w-2xl px-4 py-3 text-center">

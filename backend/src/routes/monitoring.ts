@@ -248,9 +248,6 @@ router.post("/enable", requireAuth, async (req, res) => {
         backfillSkipReason = "recent_backfill";
       } else {
         const followDIDs = follows.map((f) => f.did);
-        console.log(
-          `🚀 Starting temporary Jetstream for ${userLabel} (${followDIDs.length} DIDs) - main stream already running`,
-        );
 
         // Spin up a temporary stream to process recent history while main stream keeps pace.
         tempResult = await temporaryJetstreamManager.startForUser(
@@ -329,6 +326,7 @@ router.get("/status", requireAdmin, async (req, res) => {
 router.post("/backfill/:user_did", requireAdmin, async (req, res) => {
   try {
     const { user_did } = req.params;
+    const wantsRestart = Boolean((req.body as any)?.restart);
     const follows = await getMonitoredFollows(user_did);
 
     // Validate user has monitored follows before starting a backfill
@@ -354,22 +352,35 @@ router.post("/backfill/:user_did", requireAdmin, async (req, res) => {
     // Check capacity before starting a temporary stream; return queue position when not allowed
     const canStart = temporaryJetstreamManager.canStartStream(user_did);
     if (!canStart.allowed) {
-      const response: APIResponse<{
-        queued: boolean;
-        position?: number;
-        message: string;
-      }> = {
-        success: true,
-        data: {
-          queued: Boolean(canStart.queuePosition),
-          position: canStart.queuePosition,
-          message: formatMessage(
-            canStart.reason ?? "Temporary stream already active",
-            canStart.queuePosition,
-          ),
-        },
-      };
-      return res.json(response);
+      if (wantsRestart) {
+        // Stop current temp stream and prepare to restart
+        await temporaryJetstreamManager.stopForUser(user_did);
+        // Wait briefly until the active entry is removed
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        for (let i = 0; i < 50; i++) {
+          const check = temporaryJetstreamManager.canStartStream(user_did);
+          if (check.allowed) break;
+          await wait(100);
+        }
+        // fallthrough to start below
+      } else {
+        const response: APIResponse<{
+          queued: boolean;
+          position?: number;
+          message: string;
+        }> = {
+          success: true,
+          data: {
+            queued: Boolean(canStart.queuePosition),
+            position: canStart.queuePosition,
+            message: formatMessage(
+              canStart.reason ?? "Temporary stream already active",
+              canStart.queuePosition,
+            ),
+          },
+        };
+        return res.json(response);
+      }
     }
 
     // Gather user's current follow DIDs and start a temporary backfill stream
@@ -391,10 +402,16 @@ router.post("/backfill/:user_did", requireAdmin, async (req, res) => {
         position: result.position,
         message: result.queued
           ? formatMessage(
-              "User queued for temporary 24h backfill",
+              wantsRestart
+                ? "Temporary 24h backfill restart queued"
+                : "User queued for temporary 24h backfill",
               result.position,
             )
-          : formatMessage("Temporary 24h backfill started"),
+          : formatMessage(
+              wantsRestart
+                ? "Temporary 24h backfill restarted"
+                : "Temporary 24h backfill started",
+            ),
       },
     };
 
@@ -518,14 +535,15 @@ router.delete("/disable/:user_did", requireAuth, async (req, res) => {
 /**
  * DELETE /api/monitoring/purge/:user_did
  * Stop monitoring for a user and delete their own profile changes.
+ *
+ * Permanently removes a user's monitoring footprint and all related data,
+ * and stops any temporary stream for that user.
+ * This deletes:
+ * - All profile_changes for the user's own DID
+ * - All profile_changes for the DIDs the user was monitoring (their follows)
+ * - All monitored_follows rows owned by the user
+ * - Any backfill state rows for the user
  */
-// Permanently remove a user's monitoring data and stop any temp stream
-// Permanently remove a user's monitoring footprint and all related data.
-// This deletes:
-// - All profile_changes for the user's own DID
-// - All profile_changes for the DIDs the user was monitoring (their follows)
-// - All monitored_follows rows owned by the user
-// - Any backfill state rows for the user
 router.delete("/purge/:user_did", requireAuth, async (req, res) => {
   try {
     const { user_did } = req.params;

@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import { WebSocket, WebSocketServer } from "ws";
 import { getCorsConfig, PORT } from "./config.js";
 import { initDB, pool } from "./db.js";
-import jetstreamService from "./jetstream-service.js";
+import jetstreamService, { temporaryJetstreamManager } from "./jetstream-service.js";
 import adminRouter from "./routes/admin.js";
 import changesRouter from "./routes/changes.js";
 import monitoringRouter, {
@@ -42,13 +42,12 @@ const corsOptions: CorsOptions = {
     if (!origin || allowAllOrigins || resolvedOrigins.includes(origin)) {
       return callback(null, true);
     }
-
     console.warn(`❌ Blocked CORS origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-User-DID"], // Allow auth header for DID-based endpoints
+  allowedHeaders: ["Content-Type", "Authorization", "X-User-DID"],
 };
 
 // Middleware
@@ -239,6 +238,99 @@ const start = async () => {
 
     // Start Jetstream Service after server is running
     await jetstreamService.start();
+
+    // After successful start, attempt to auto-restart any pending temp streams
+    void (async () => {
+      try {
+        // Only restart temp streams if main Jetstream is running with a valid cursor
+        if (!jetstreamService.isRunningWithCursor()) {
+          console.log(
+            "ℹ️  Skipping temp-stream auto-restart: main stream not yet running with a valid cursor (retrying in 30s)",
+          );
+          setTimeout(() => {
+            void (async () => {
+              try {
+                if (!jetstreamService.isRunningWithCursor()) return;
+                const { getMonitoringUserCounts, getMonitoredFollows } =
+                  await import("./db.js");
+                const users = await getMonitoringUserCounts();
+                const pendingUsers = users
+                  .filter((u) => {
+                    if (!u.last_started_at) return false;
+                    if (!u.last_completed_at) return true;
+                    return (
+                      new Date(u.last_completed_at).getTime() <
+                      new Date(u.last_started_at).getTime()
+                    );
+                  })
+                  .map((u) => u.user_did);
+                for (const userDID of pendingUsers) {
+                  try {
+                    const rows = await getMonitoredFollows(userDID);
+                    const followDIDs = rows.map((r) => r.follow_did);
+                    if (followDIDs.length === 0) continue;
+                    await temporaryJetstreamManager.startForUser(
+                      userDID,
+                      followDIDs,
+                    );
+                    console.log(
+                      `♻️  Auto-restarted temporary Jetstream for ${userDID} (${followDIDs.length} DIDs)`,
+                    );
+                  } catch (err) {
+                    console.error(
+                      `❌ Failed to auto-restart temporary stream for ${userDID}:`,
+                      err,
+                    );
+                  }
+                }
+              } catch (error) {
+                console.error(
+                  "❌ Failed temp-stream auto-restart retry:",
+                  error,
+                );
+              }
+            })();
+          }, 30000);
+          return;
+        }
+
+        const { getMonitoringUserCounts, getMonitoredFollows } = await import(
+          "./db.js"
+        );
+        const users = await getMonitoringUserCounts();
+
+        // Pending = started but not completed (or completed before started)
+        const pendingUsers = users
+          .filter((u) => {
+            if (!u.last_started_at) return false;
+            if (!u.last_completed_at) return true;
+            return (
+              new Date(u.last_completed_at).getTime() <
+              new Date(u.last_started_at).getTime()
+            );
+          })
+          .map((u) => u.user_did);
+
+        for (const userDID of pendingUsers) {
+          try {
+            const rows = await getMonitoredFollows(userDID);
+            const followDIDs = rows.map((r) => r.follow_did);
+            if (followDIDs.length === 0) continue;
+            await temporaryJetstreamManager.startForUser(userDID, followDIDs);
+            console.log(
+              `♻️  Auto-restarted temporary Jetstream for ${userDID} (${followDIDs.length} DIDs)`,
+            );
+          } catch (err) {
+            console.error(
+              `❌ Failed to auto-restart temporary stream for ${userDID}:`,
+              err,
+            );
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed temp-stream auto-restart bootstrap:", error);
+      }
+    })();
   } catch (error) {
     console.error("❌ Failed to start server:", error);
     process.exit(1);

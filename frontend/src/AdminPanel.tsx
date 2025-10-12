@@ -148,6 +148,7 @@ export const AdminPanel = (props: Props) => {
     try {
       // Load stats
       const data = await getAdminStats(props.userDID);
+
       // Merge with existing stats to preserve WebSocket-updated cursor info.
       const previous = stats();
       const previousCursor = previous?.cursorTimestamp ?? null;
@@ -209,9 +210,7 @@ export const AdminPanel = (props: Props) => {
     }
   };
 
-  /**
-   * Open modal for starting Jetstream with cursor selection.
-   */
+  // Open modal for starting Jetstream with cursor selection.
   const openStartModal = async () => {
     try {
       // Get recommended cursor from backend (resumes from stop if <24h, else live)
@@ -331,6 +330,7 @@ export const AdminPanel = (props: Props) => {
   const handleManualBackfill = async (
     userDID: string,
     handle: string | null,
+    restart?: boolean,
   ) => {
     if (manualBackfillUsers().has(userDID)) {
       return;
@@ -340,7 +340,9 @@ export const AdminPanel = (props: Props) => {
     setManualBackfillPending(userDID, true);
     try {
       // Call backend to trigger a temporary 24h backfill for the user
-      const result = await triggerManualBackfill(props.userDID, userDID);
+      const result = await triggerManualBackfill(props.userDID, userDID, {
+        restart,
+      });
 
       // Build a clear identity label (prefer handle when available)
       const identityLabel = handle ? `@${handle} (${userDID})` : userDID;
@@ -478,6 +480,8 @@ export const AdminPanel = (props: Props) => {
     ) {
       return;
     }
+
+    // Set WebSocket URL
     const wsUrl = ENV.WS_URL;
 
     // Clear any existing reconnect timeout
@@ -961,20 +965,24 @@ export const AdminPanel = (props: Props) => {
                                   ? `✅ ${formatBackfillTimestamp(user.lastCompletedAt)}`
                                   : "❌ Pending"}
                               </span>
-                              <Show when={user.hasCompletedBackfill}>
-                                <button
-                                  type="button"
-                                  class="text-blue-600 underline hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
-                                  disabled={isPending()}
-                                  onClick={() =>
-                                    handleManualBackfill(user.did, user.handle)
-                                  }
-                                >
-                                  {isPending()
-                                    ? "Starting..."
-                                    : "Manual backfill"}
-                                </button>
-                              </Show>
+                              <button
+                                type="button"
+                                class="text-blue-600 underline hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+                                disabled={isPending()}
+                                onClick={() =>
+                                  handleManualBackfill(
+                                    user.did,
+                                    user.handle,
+                                    !user.hasCompletedBackfill,
+                                  )
+                                }
+                              >
+                                {isPending()
+                                  ? "Starting..."
+                                  : user.hasCompletedBackfill
+                                    ? "Manual backfill"
+                                    : "Restart"}
+                              </button>
                             </div>
                           </div>
                         );

@@ -14,6 +14,7 @@ import jetstreamService from "../jetstream-service.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
 
+// Create Router
 const router = express.Router();
 
 /**
@@ -153,6 +154,7 @@ router.post("/jetstream/start", requireAdmin, async (req, res) => {
     }
     console.log(logMessage);
 
+    // Start Jetstream with optional cursor (µs); resume from position when provided
     await jetstreamService.start(cursor);
 
     // Acknowledge successful Jetstream startup for admin UI feedback.

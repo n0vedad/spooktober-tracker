@@ -124,7 +124,6 @@ const buildOptionsUpdateMessage = (dids: readonly string[]): string => {
       maxMessageSizeBytes: 0, // No limit
     },
   };
-
   return JSON.stringify(message);
 };
 

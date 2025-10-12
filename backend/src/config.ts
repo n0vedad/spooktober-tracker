@@ -82,6 +82,7 @@ const parseCorsList = (
     );
   }
 
+  // Explicit whitelist mode: allow only the provided origins
   return { allowAll: false, origins };
 };
 
@@ -102,7 +103,6 @@ const parseHostList = (raw: string, name: string): string[] => {
   if (hosts.length === 0) {
     throw new Error(`${name} must list at least one Jetstream host.`);
   }
-
   return hosts;
 };
 
