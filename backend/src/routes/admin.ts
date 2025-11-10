@@ -13,6 +13,12 @@ import {
 import jetstreamService from "../jetstream-service.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
+import { validate } from "../validation/middleware.js";
+import {
+  addIgnoredUserBodySchema,
+  didParamSchema,
+  jetstreamStartBodySchema,
+} from "../validation/schemas.js";
 
 // Create Router
 const router = express.Router();
@@ -132,9 +138,13 @@ router.get("/jetstream/recommended-cursor", requireAdmin, async (req, res) => {
  * POST /api/admin/jetstream/start
  * Start Jetstream with optional cursor
  */
-router.post("/jetstream/start", requireAdmin, async (req, res) => {
-  try {
-    const { cursor } = req.body;
+router.post(
+  "/jetstream/start",
+  requireAdmin,
+  validate(jetstreamStartBodySchema),
+  async (req, res) => {
+    try {
+      const { cursor } = req.body;
 
     // Format cursor for logging
     let logMessage = "🚀 Admin triggered Jetstream start";
@@ -165,17 +175,18 @@ router.post("/jetstream/start", requireAdmin, async (req, res) => {
       },
     };
 
-    // Response & error handling
-    res.json(response);
-  } catch (error) {
-    console.error("Error starting Jetstream:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to start Jetstream",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Response & error handling
+      res.json(response);
+    } catch (error) {
+      console.error("Error starting Jetstream:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to start Jetstream",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * GET /api/admin/ignored-users
@@ -217,18 +228,13 @@ router.get("/ignored-users", requireAdmin, async (req, res) => {
  * POST /api/admin/ignored-users
  * Add a user to the ignored list (also deletes their profile changes)
  */
-router.post("/ignored-users", requireAdmin, async (req, res) => {
-  try {
-    const { did } = req.body;
-
-    // Validate DID format
-    if (!did || !did.startsWith("did:plc:")) {
-      const response: APIResponse<never> = {
-        success: false,
-        error: "Invalid DID format (must be did:plc:xxxxx)",
-      };
-      return res.status(400).json(response);
-    }
+router.post(
+  "/ignored-users",
+  requireAdmin,
+  validate(addIgnoredUserBodySchema),
+  async (req, res) => {
+    try {
+      const { did } = req.body;
 
     // Add to ignore list
     const result = await addIgnoredUser(did);
@@ -256,23 +262,28 @@ router.post("/ignored-users", requireAdmin, async (req, res) => {
       },
     };
 
-    // Response & error handling
-    res.json(response);
-  } catch (error) {
-    console.error("Error adding ignored user:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to add ignored user",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Response & error handling
+      res.json(response);
+    } catch (error) {
+      console.error("Error adding ignored user:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to add ignored user",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * DELETE /api/admin/ignored-users/:did
  * Remove a user from the ignored list
  */
-router.delete("/ignored-users/:did", requireAdmin, async (req, res) => {
+router.delete(
+  "/ignored-users/:did",
+  requireAdmin,
+  validate(didParamSchema, "params"),
+  async (req, res) => {
   try {
     const { did } = req.params;
 
@@ -296,16 +307,17 @@ router.delete("/ignored-users/:did", requireAdmin, async (req, res) => {
       },
     };
 
-    // Response & error handling
-    res.json(response);
-  } catch (error) {
-    console.error("Error removing ignored user:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to remove ignored user",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Response & error handling
+      res.json(response);
+    } catch (error) {
+      console.error("Error removing ignored user:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to remove ignored user",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 export default router;

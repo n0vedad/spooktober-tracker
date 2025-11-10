@@ -18,6 +18,12 @@ import jetstreamService, {
 } from "../jetstream-service.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
+import { validate } from "../validation/middleware.js";
+import {
+  enableMonitoringBodySchema,
+  userDidParamSchema,
+} from "../validation/schemas.js";
+import { z } from "zod";
 
 const router = express.Router();
 
@@ -135,35 +141,35 @@ export async function broadcastMonitoringStatusUpdate(): Promise<void> {
   }
 }
 
+// Extended validation schema for enable endpoint
+const enableMonitoringExtendedSchema = z.object({
+  user_did: z.string().regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
+  follows: z
+    .array(
+      z.object({
+        did: z.string().regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
+        handle: z.string().regex(/^@?[a-zA-Z0-9.-]+$/, "Invalid handle format"),
+        rkey: z.string().optional(),
+      }),
+    )
+    .min(1, "At least one follow is required"),
+});
+
 /**
  * POST /api/monitoring/enable
  * Enable monitoring for a user's follows (requires login)
  * Body: { user_did: string, follows: Array<{ did: string, handle: string }> }
  */
-router.post("/enable", requireAuth, async (req, res) => {
-  try {
-    const { user_did, follows } = req.body as {
-      user_did?: string;
-      follows?: Array<{ did: string; handle: string }>;
-    };
-
-    // Validate that a requesting user DID accompanies the payload.
-    if (!user_did) {
-      const response: APIResponse<never> = {
-        success: false,
-        error: "user_did is required",
+router.post(
+  "/enable",
+  requireAuth,
+  validate(enableMonitoringExtendedSchema),
+  async (req, res) => {
+    try {
+      const { user_did, follows } = req.body as {
+        user_did: string;
+        follows: Array<{ did: string; handle: string }>;
       };
-      return res.status(400).json(response);
-    }
-
-    // Require at least one follow entry to enable monitoring.
-    if (!follows || !Array.isArray(follows) || follows.length === 0) {
-      const response: APIResponse<never> = {
-        success: false,
-        error: "follows array is required and must not be empty",
-      };
-      return res.status(400).json(response);
-    }
 
     // Check global 10,000 DID limit
     const { getAllMonitoredDIDs, getMonitoredFollows } = await import(
@@ -280,19 +286,20 @@ router.post("/enable", requireAuth, async (req, res) => {
     };
 
     // Broadcast latest monitoring status to live WebSocket clients
-    await broadcastMonitoringStatusUpdate();
-    res.json(response);
+      await broadcastMonitoringStatusUpdate();
+      res.json(response);
 
-    // Fall back to a generic error payload when enabling fails unexpectedly.
-  } catch (error) {
-    console.error("Error enabling monitoring:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to enable monitoring",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Fall back to a generic error payload when enabling fails unexpectedly.
+    } catch (error) {
+      console.error("Error enabling monitoring:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to enable monitoring",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * GET /api/monitoring/status
@@ -319,11 +326,21 @@ router.get("/status", requireAdmin, async (req, res) => {
   }
 });
 
+// Backfill restart schema
+const backfillBodySchema = z.object({
+  restart: z.boolean().optional(),
+});
+
 /**
  * POST /api/monitoring/backfill/:user_did
  * Manually trigger a temporary 24h backfill for an active user (admin only)
  */
-router.post("/backfill/:user_did", requireAdmin, async (req, res) => {
+router.post(
+  "/backfill/:user_did",
+  requireAdmin,
+  validate(userDidParamSchema, "params"),
+  validate(backfillBodySchema),
+  async (req, res) => {
   try {
     const { user_did } = req.params;
     const wantsRestart = Boolean((req.body as any)?.restart);
@@ -417,23 +434,28 @@ router.post("/backfill/:user_did", requireAdmin, async (req, res) => {
 
     await broadcastMonitoringStatusUpdate();
 
-    // Error handling
-    res.json(response);
-  } catch (error) {
-    console.error("Error starting manual backfill:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to start manual backfill",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Error handling
+      res.json(response);
+    } catch (error) {
+      console.error("Error starting manual backfill:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to start manual backfill",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * GET /api/monitoring/follows/:user_did
  * Get monitored follows for a user (requires login)
  */
-router.get("/follows/:user_did", requireAuth, async (req, res) => {
+router.get(
+  "/follows/:user_did",
+  requireAuth,
+  validate(userDidParamSchema, "params"),
+  async (req, res) => {
   try {
     const { user_did } = req.params;
 
@@ -446,24 +468,29 @@ router.get("/follows/:user_did", requireAuth, async (req, res) => {
       data: { follows },
     };
 
-    res.json(response);
+      res.json(response);
 
-    // Surface a generic failure response on unexpected backend errors.
-  } catch (error) {
-    console.error("Error fetching monitored follows:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to fetch monitored follows",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Surface a generic failure response on unexpected backend errors.
+    } catch (error) {
+      console.error("Error fetching monitored follows:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to fetch monitored follows",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * GET /api/monitoring/changes/:user_did
  * Get all changes for a user's monitored follows (requires login)
  */
-router.get("/changes/:user_did", requireAuth, async (req, res) => {
+router.get(
+  "/changes/:user_did",
+  requireAuth,
+  validate(userDidParamSchema, "params"),
+  async (req, res) => {
   try {
     const { user_did } = req.params;
 
@@ -479,24 +506,29 @@ router.get("/changes/:user_did", requireAuth, async (req, res) => {
       },
     };
 
-    res.json(response);
+      res.json(response);
 
-    // Expose a generic server failure to callers when retrieval fails.
-  } catch (error) {
-    console.error("Error fetching user changes:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to fetch changes",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Expose a generic server failure to callers when retrieval fails.
+    } catch (error) {
+      console.error("Error fetching user changes:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to fetch changes",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * DELETE /api/monitoring/disable/:user_did
  * Disable monitoring for a user (requires login)
  */
-router.delete("/disable/:user_did", requireAuth, async (req, res) => {
+router.delete(
+  "/disable/:user_did",
+  requireAuth,
+  validate(userDidParamSchema, "params"),
+  async (req, res) => {
   try {
     const { user_did } = req.params;
 
@@ -518,19 +550,20 @@ router.delete("/disable/:user_did", requireAuth, async (req, res) => {
       data: { message: "Monitoring disabled" },
     };
 
-    await broadcastMonitoringStatusUpdate();
-    res.json(response);
+      await broadcastMonitoringStatusUpdate();
+      res.json(response);
 
-    // Provide a generic failure response when disable fails unexpectedly.
-  } catch (error) {
-    console.error("Error disabling monitoring:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to disable monitoring",
-    };
-    res.status(500).json(response);
-  }
-});
+      // Provide a generic failure response when disable fails unexpectedly.
+    } catch (error) {
+      console.error("Error disabling monitoring:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to disable monitoring",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 /**
  * DELETE /api/monitoring/purge/:user_did
@@ -544,7 +577,11 @@ router.delete("/disable/:user_did", requireAuth, async (req, res) => {
  * - All monitored_follows rows owned by the user
  * - Any backfill state rows for the user
  */
-router.delete("/purge/:user_did", requireAuth, async (req, res) => {
+router.delete(
+  "/purge/:user_did",
+  requireAuth,
+  validate(userDidParamSchema, "params"),
+  async (req, res) => {
   try {
     const { user_did } = req.params;
 
@@ -626,15 +663,16 @@ router.delete("/purge/:user_did", requireAuth, async (req, res) => {
         removedFollows,
       },
     };
-    res.json(response);
-  } catch (error) {
-    console.error("Error purging user data:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to purge user data",
-    };
-    res.status(500).json(response);
-  }
-});
+      res.json(response);
+    } catch (error) {
+      console.error("Error purging user data:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to purge user data",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
 
 export default router;

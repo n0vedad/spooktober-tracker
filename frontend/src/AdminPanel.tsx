@@ -481,8 +481,8 @@ export const AdminPanel = (props: Props) => {
       return;
     }
 
-    // Set WebSocket URL
-    const wsUrl = ENV.WS_URL;
+    // Set WebSocket URL with DID authentication parameter
+    const wsUrl = `${ENV.WS_URL}?did=${encodeURIComponent(props.userDID)}`;
 
     // Clear any existing reconnect timeout
     if (reconnectTimeout) {

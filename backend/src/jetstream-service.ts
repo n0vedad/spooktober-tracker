@@ -872,8 +872,9 @@ class JetstreamService {
       );
       const ignoredSet = new Set(ignoredUsers.map((u) => u.did));
 
-      // IMPORTANT: Put user DIDs FIRST to ensure they're always in the first 160 DIDs
-      // (Jetstream has a limit). Also exclude any DID on the ignore list from BOTH groups.
+      // IMPORTANT: Put user DIDs FIRST so they remain within the first MAX_WANTED_DIDS
+      // if the combined list exceeds Jetstream's limit. Also exclude any DID on the
+      // ignore list from BOTH groups.
       const userDIDsFiltered = userDIDs.filter((did) => !ignoredSet.has(did));
       const followedDIDsFiltered = followedDIDs.filter(
         (did) => !ignoredSet.has(did),

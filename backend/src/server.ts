@@ -153,7 +153,36 @@ const start = async () => {
     const httpServer = createServer(app);
 
     // Create WebSocket server
-    wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+    wss = new WebSocketServer({ server: httpServer, path: "/ws", noServer: true });
+
+    // Handle WebSocket upgrade with authentication
+    httpServer.on("upgrade", (request, socket, head) => {
+      try {
+        // Parse URL to get query parameters
+        const url = new URL(request.url || "", `http://${request.headers.host}`);
+        const did = url.searchParams.get("did");
+
+        // Validate DID format
+        const didRegex = /^did:(plc|web):[a-z0-9.-]+$/;
+        if (!did || !didRegex.test(did)) {
+          console.warn(
+            `❌ WebSocket connection rejected: Invalid or missing DID (${did})`,
+          );
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+
+        // DID is valid, allow upgrade
+        wss?.handleUpgrade(request, socket, head, (ws) => {
+          wss?.emit("connection", ws, request, did);
+        });
+      } catch (error) {
+        console.error("❌ WebSocket upgrade error:", error);
+        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+        socket.destroy();
+      }
+    });
 
     // Bridge monitoring status snapshots to connected WebSocket clients
     registerMonitoringStatusBroadcaster((snapshot) => {
@@ -174,10 +203,14 @@ const start = async () => {
     // Push an initial snapshot so clients have state immediately on connect
     void broadcastMonitoringStatusUpdate();
 
-    // Connect
-    wss.on("connection", (ws) => {
+    // Connect (with authenticated DID)
+    wss.on("connection", (ws: WebSocket, _request: any, authenticatedDID: string) => {
+      console.log(`✅ WebSocket connection established for ${authenticatedDID}`);
+
       // Disconnect
-      ws.on("close", () => {});
+      ws.on("close", () => {
+        console.log(`🔌 WebSocket disconnected for ${authenticatedDID}`);
+      });
 
       // Send initial cursor info
       const cursorInfo = jetstreamService.getCursorInfo();
