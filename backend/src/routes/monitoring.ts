@@ -3,6 +3,7 @@
  */
 
 import express from "express";
+import { z } from "zod";
 import type { APIResponse } from "../../../shared/types.js";
 import {
   addMonitoredFollows,
@@ -19,11 +20,7 @@ import jetstreamService, {
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
 import { validate } from "../validation/middleware.js";
-import {
-  enableMonitoringBodySchema,
-  userDidParamSchema,
-} from "../validation/schemas.js";
-import { z } from "zod";
+import { userDidParamSchema } from "../validation/schemas.js";
 
 const router = express.Router();
 
@@ -143,11 +140,15 @@ export async function broadcastMonitoringStatusUpdate(): Promise<void> {
 
 // Extended validation schema for enable endpoint
 const enableMonitoringExtendedSchema = z.object({
-  user_did: z.string().regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
+  user_did: z
+    .string()
+    .regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
   follows: z
     .array(
       z.object({
-        did: z.string().regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
+        did: z
+          .string()
+          .regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format"),
         handle: z.string().regex(/^@?[a-zA-Z0-9.-]+$/, "Invalid handle format"),
         rkey: z.string().optional(),
       }),
@@ -171,121 +172,121 @@ router.post(
         follows: Array<{ did: string; handle: string }>;
       };
 
-    // Check global 10,000 DID limit
-    const { getAllMonitoredDIDs, getMonitoredFollows } = await import(
-      "../db.js"
-    );
-    const currentMonitoredDIDs = await getAllMonitoredDIDs();
-    const currentCount = currentMonitoredDIDs.length;
+      // Check global 10,000 DID limit
+      const { getAllMonitoredDIDs, getMonitoredFollows } = await import(
+        "../db.js"
+      );
+      const currentMonitoredDIDs = await getAllMonitoredDIDs();
+      const currentCount = currentMonitoredDIDs.length;
 
-    // Get user's current follows to calculate net new DIDs
-    const userCurrentFollows = await getMonitoredFollows(user_did);
-    const userCurrentDIDs = new Set(
-      userCurrentFollows.map((f) => f.follow_did),
-    );
-    const requestedDIDs = new Set(follows.map((f) => f.did));
-    const newDIDs = [...requestedDIDs].filter(
-      (did) => !userCurrentDIDs.has(did),
-    );
-    const netNewCount = newDIDs.length;
-    const totalAfterAdd = currentCount + netNewCount;
+      // Get user's current follows to calculate net new DIDs
+      const userCurrentFollows = await getMonitoredFollows(user_did);
+      const userCurrentDIDs = new Set(
+        userCurrentFollows.map((f) => f.follow_did),
+      );
+      const requestedDIDs = new Set(follows.map((f) => f.did));
+      const newDIDs = [...requestedDIDs].filter(
+        (did) => !userCurrentDIDs.has(did),
+      );
+      const netNewCount = newDIDs.length;
+      const totalAfterAdd = currentCount + netNewCount;
 
-    // Enforce global cap of 10,000 monitored DIDs to protect resources
-    if (totalAfterAdd > 10000) {
-      const response: APIResponse<never> = {
-        success: false,
-        error: `Cannot enable monitoring: would exceed 10,000 DID limit. Currently monitoring ${currentCount} DIDs globally, your request would add ${netNewCount} new DIDs (total: ${totalAfterAdd}). Please try again later or reduce your follow count.`,
-      };
-      return res.status(429).json(response);
-    }
+      // Enforce global cap of 10,000 monitored DIDs to protect resources
+      if (totalAfterAdd > 10000) {
+        const response: APIResponse<never> = {
+          success: false,
+          error: `Cannot enable monitoring: would exceed 10,000 DID limit. Currently monitoring ${currentCount} DIDs globally, your request would add ${netNewCount} new DIDs (total: ${totalAfterAdd}). Please try again later or reduce your follow count.`,
+        };
+        return res.status(429).json(response);
+      }
 
-    // Check if temporary stream can be started
-    // Check capacity before starting a temporary stream; return queue position when not allowed
-    const canStart = temporaryJetstreamManager.canStartStream(user_did);
-    if (!canStart.allowed) {
+      // Check if temporary stream can be started
+      // Check capacity before starting a temporary stream; return queue position when not allowed
+      const canStart = temporaryJetstreamManager.canStartStream(user_did);
+      if (!canStart.allowed) {
+        const response: APIResponse<{
+          queued: boolean;
+          position?: number;
+          reason?: string;
+        }> = {
+          success: true,
+          data: {
+            queued: Boolean(canStart.queuePosition),
+            position: canStart.queuePosition,
+            reason: canStart.reason,
+          },
+        };
+        return res.json(response);
+      }
+
+      // Add monitored follows
+      await addMonitoredFollows(user_did, follows);
+
+      // Trigger immediate main Jetstream DID reload
+      const { resolveHandle } = await import("../utils/handle-resolver.js");
+      const userHandle = await resolveHandle(user_did);
+      const userLabel = userHandle ? `${userHandle} (${user_did})` : user_did;
+      console.log(
+        `➕ User ${userLabel} enabled monitoring - reloading ${follows.length} DIDs`,
+      );
+      await jetstreamService.reloadDIDsNow();
+
+      // Only start temporary Jetstream if main Jetstream is already running with a valid cursor
+      // If main Jetstream just started (from 24h ago), it will catch everything itself
+      let tempResult: { queued: boolean; position?: number } | null = null;
+      let backfillTriggered = false;
+      let backfillSkipReason: string | undefined;
+
+      // Main Jetstream has an active cursor - need temporary stream for 24h backfill
+      if (jetstreamService.isRunningWithCursor()) {
+        const backfillState = await getBackfillState(user_did);
+        const lastStartedAt = backfillState?.last_started_at
+          ? new Date(backfillState.last_started_at)
+          : null;
+        const withinLockWindow =
+          lastStartedAt !== null &&
+          Date.now() - lastStartedAt.getTime() < BACKFILL_LOCK_WINDOW_MS;
+
+        // Respect lock window: don't start another temp stream if a backfill began recently
+        if (withinLockWindow) {
+          console.log(
+            `⏭️  Skipping temporary Jetstream for ${userLabel}; last backfill started ${lastStartedAt?.toISOString()}`,
+          );
+          backfillSkipReason = "recent_backfill";
+        } else {
+          const followDIDs = follows.map((f) => f.did);
+
+          // Spin up a temporary stream to process recent history while main stream keeps pace.
+          tempResult = await temporaryJetstreamManager.startForUser(
+            user_did,
+            followDIDs,
+          );
+          backfillTriggered = true;
+        }
+      } else {
+        console.log(
+          `ℹ️  Main Jetstream will handle 24h backfill for ${userLabel} (starting from 24h ago)`,
+        );
+        backfillSkipReason = "main_stream_catching_up";
+      }
+
+      // Summarize how many follows were registered and whether a temp stream was started/queued.
       const response: APIResponse<{
-        queued: boolean;
-        position?: number;
-        reason?: string;
+        count: number;
+        temporaryStream: { queued: boolean; position?: number } | null;
+        backfillTriggered: boolean;
+        backfillSkipReason?: string;
       }> = {
         success: true,
         data: {
-          queued: Boolean(canStart.queuePosition),
-          position: canStart.queuePosition,
-          reason: canStart.reason,
+          count: follows.length,
+          temporaryStream: tempResult,
+          backfillTriggered,
+          backfillSkipReason,
         },
       };
-      return res.json(response);
-    }
 
-    // Add monitored follows
-    await addMonitoredFollows(user_did, follows);
-
-    // Trigger immediate main Jetstream DID reload
-    const { resolveHandle } = await import("../utils/handle-resolver.js");
-    const userHandle = await resolveHandle(user_did);
-    const userLabel = userHandle ? `${userHandle} (${user_did})` : user_did;
-    console.log(
-      `➕ User ${userLabel} enabled monitoring - reloading ${follows.length} DIDs`,
-    );
-    await jetstreamService.reloadDIDsNow();
-
-    // Only start temporary Jetstream if main Jetstream is already running with a valid cursor
-    // If main Jetstream just started (from 24h ago), it will catch everything itself
-    let tempResult: { queued: boolean; position?: number } | null = null;
-    let backfillTriggered = false;
-    let backfillSkipReason: string | undefined;
-
-    // Main Jetstream has an active cursor - need temporary stream for 24h backfill
-    if (jetstreamService.isRunningWithCursor()) {
-      const backfillState = await getBackfillState(user_did);
-      const lastStartedAt = backfillState?.last_started_at
-        ? new Date(backfillState.last_started_at)
-        : null;
-      const withinLockWindow =
-        lastStartedAt !== null &&
-        Date.now() - lastStartedAt.getTime() < BACKFILL_LOCK_WINDOW_MS;
-
-      // Respect lock window: don't start another temp stream if a backfill began recently
-      if (withinLockWindow) {
-        console.log(
-          `⏭️  Skipping temporary Jetstream for ${userLabel}; last backfill started ${lastStartedAt?.toISOString()}`,
-        );
-        backfillSkipReason = "recent_backfill";
-      } else {
-        const followDIDs = follows.map((f) => f.did);
-
-        // Spin up a temporary stream to process recent history while main stream keeps pace.
-        tempResult = await temporaryJetstreamManager.startForUser(
-          user_did,
-          followDIDs,
-        );
-        backfillTriggered = true;
-      }
-    } else {
-      console.log(
-        `ℹ️  Main Jetstream will handle 24h backfill for ${userLabel} (starting from 24h ago)`,
-      );
-      backfillSkipReason = "main_stream_catching_up";
-    }
-
-    // Summarize how many follows were registered and whether a temp stream was started/queued.
-    const response: APIResponse<{
-      count: number;
-      temporaryStream: { queued: boolean; position?: number } | null;
-      backfillTriggered: boolean;
-      backfillSkipReason?: string;
-    }> = {
-      success: true,
-      data: {
-        count: follows.length,
-        temporaryStream: tempResult,
-        backfillTriggered,
-        backfillSkipReason,
-      },
-    };
-
-    // Broadcast latest monitoring status to live WebSocket clients
+      // Broadcast latest monitoring status to live WebSocket clients
       await broadcastMonitoringStatusUpdate();
       res.json(response);
 
@@ -341,98 +342,98 @@ router.post(
   validate(userDidParamSchema, "params"),
   validate(backfillBodySchema),
   async (req, res) => {
-  try {
-    const { user_did } = req.params;
-    const wantsRestart = Boolean((req.body as any)?.restart);
-    const follows = await getMonitoredFollows(user_did);
+    try {
+      const { user_did } = req.params;
+      const wantsRestart = Boolean((req.body as any)?.restart);
+      const follows = await getMonitoredFollows(user_did);
 
-    // Validate user has monitored follows before starting a backfill
-    if (!follows || follows.length === 0) {
-      const response: APIResponse<never> = {
-        success: false,
-        error: "User has no monitored follows",
-      };
-      return res.status(400).json(response);
-    }
-
-    // Resolve target identity and prepare human‑readable log/response labels
-    const resolvedIdentity = await resolveHandles([user_did]);
-    const identityHandle = resolvedIdentity[0]?.handle ?? null;
-    const identityLabel = identityHandle
-      ? `@${resolvedIdentity[0].handle} (${user_did})`
-      : user_did;
-    const formatMessage = (base: string, position?: number | undefined) =>
-      position !== undefined
-        ? `${identityLabel}: ${base} (#${position})`
-        : `${identityLabel}: ${base}`;
-
-    // Check capacity before starting a temporary stream; return queue position when not allowed
-    const canStart = temporaryJetstreamManager.canStartStream(user_did);
-    if (!canStart.allowed) {
-      if (wantsRestart) {
-        // Stop current temp stream and prepare to restart
-        await temporaryJetstreamManager.stopForUser(user_did);
-        // Wait briefly until the active entry is removed
-        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-        for (let i = 0; i < 50; i++) {
-          const check = temporaryJetstreamManager.canStartStream(user_did);
-          if (check.allowed) break;
-          await wait(100);
-        }
-        // fallthrough to start below
-      } else {
-        const response: APIResponse<{
-          queued: boolean;
-          position?: number;
-          message: string;
-        }> = {
-          success: true,
-          data: {
-            queued: Boolean(canStart.queuePosition),
-            position: canStart.queuePosition,
-            message: formatMessage(
-              canStart.reason ?? "Temporary stream already active",
-              canStart.queuePosition,
-            ),
-          },
+      // Validate user has monitored follows before starting a backfill
+      if (!follows || follows.length === 0) {
+        const response: APIResponse<never> = {
+          success: false,
+          error: "User has no monitored follows",
         };
-        return res.json(response);
+        return res.status(400).json(response);
       }
-    }
 
-    // Gather user's current follow DIDs and start a temporary backfill stream
-    const followDIDs = follows.map((follow) => follow.follow_did);
-    const result = await temporaryJetstreamManager.startForUser(
-      user_did,
-      followDIDs,
-    );
+      // Resolve target identity and prepare human‑readable log/response labels
+      const resolvedIdentity = await resolveHandles([user_did]);
+      const identityHandle = resolvedIdentity[0]?.handle ?? null;
+      const identityLabel = identityHandle
+        ? `@${resolvedIdentity[0].handle} (${user_did})`
+        : user_did;
+      const formatMessage = (base: string, position?: number | undefined) =>
+        position !== undefined
+          ? `${identityLabel}: ${base} (#${position})`
+          : `${identityLabel}: ${base}`;
 
-    // Summarize temporary backfill start/queue outcome for admin UI
-    const response: APIResponse<{
-      queued: boolean;
-      position?: number;
-      message: string;
-    }> = {
-      success: true,
-      data: {
-        queued: result.queued,
-        position: result.position,
-        message: result.queued
-          ? formatMessage(
-              wantsRestart
-                ? "Temporary 24h backfill restart queued"
-                : "User queued for temporary 24h backfill",
-              result.position,
-            )
-          : formatMessage(
-              wantsRestart
-                ? "Temporary 24h backfill restarted"
-                : "Temporary 24h backfill started",
-            ),
-      },
-    };
+      // Check capacity before starting a temporary stream; return queue position when not allowed
+      const canStart = temporaryJetstreamManager.canStartStream(user_did);
+      if (!canStart.allowed) {
+        if (wantsRestart) {
+          // Stop current temp stream and prepare to restart
+          await temporaryJetstreamManager.stopForUser(user_did);
+          // Wait briefly until the active entry is removed
+          const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+          for (let i = 0; i < 50; i++) {
+            const check = temporaryJetstreamManager.canStartStream(user_did);
+            if (check.allowed) break;
+            await wait(100);
+          }
+          // fallthrough to start below
+        } else {
+          const response: APIResponse<{
+            queued: boolean;
+            position?: number;
+            message: string;
+          }> = {
+            success: true,
+            data: {
+              queued: Boolean(canStart.queuePosition),
+              position: canStart.queuePosition,
+              message: formatMessage(
+                canStart.reason ?? "Temporary stream already active",
+                canStart.queuePosition,
+              ),
+            },
+          };
+          return res.json(response);
+        }
+      }
 
-    await broadcastMonitoringStatusUpdate();
+      // Gather user's current follow DIDs and start a temporary backfill stream
+      const followDIDs = follows.map((follow) => follow.follow_did);
+      const result = await temporaryJetstreamManager.startForUser(
+        user_did,
+        followDIDs,
+      );
+
+      // Summarize temporary backfill start/queue outcome for admin UI
+      const response: APIResponse<{
+        queued: boolean;
+        position?: number;
+        message: string;
+      }> = {
+        success: true,
+        data: {
+          queued: result.queued,
+          position: result.position,
+          message: result.queued
+            ? formatMessage(
+                wantsRestart
+                  ? "Temporary 24h backfill restart queued"
+                  : "User queued for temporary 24h backfill",
+                result.position,
+              )
+            : formatMessage(
+                wantsRestart
+                  ? "Temporary 24h backfill restarted"
+                  : "Temporary 24h backfill started",
+              ),
+        },
+      };
+
+      await broadcastMonitoringStatusUpdate();
 
       // Error handling
       res.json(response);
@@ -456,17 +457,17 @@ router.get(
   requireAuth,
   validate(userDidParamSchema, "params"),
   async (req, res) => {
-  try {
-    const { user_did } = req.params;
+    try {
+      const { user_did } = req.params;
 
-    // Retrieve the stored follow list for the specified user DID.
-    const follows = await getMonitoredFollows(user_did);
+      // Retrieve the stored follow list for the specified user DID.
+      const follows = await getMonitoredFollows(user_did);
 
-    // Return the follows payload so clients can render monitoring state.
-    const response: APIResponse<{ follows: typeof follows }> = {
-      success: true,
-      data: { follows },
-    };
+      // Return the follows payload so clients can render monitoring state.
+      const response: APIResponse<{ follows: typeof follows }> = {
+        success: true,
+        data: { follows },
+      };
 
       res.json(response);
 
@@ -491,20 +492,21 @@ router.get(
   requireAuth,
   validate(userDidParamSchema, "params"),
   async (req, res) => {
-  try {
-    const { user_did } = req.params;
+    try {
+      const { user_did } = req.params;
 
-    // Load monitored changes specific to the requested user DID.
-    const changes = await getChangesForUser(user_did);
+      // Load monitored changes specific to the requested user DID.
+      const changes = await getChangesForUser(user_did);
 
-    // Include both the change list and the aggregated total for clients.
-    const response: APIResponse<{ changes: typeof changes; total: number }> = {
-      success: true,
-      data: {
-        changes,
-        total: changes.length,
-      },
-    };
+      // Include both the change list and the aggregated total for clients.
+      const response: APIResponse<{ changes: typeof changes; total: number }> =
+        {
+          success: true,
+          data: {
+            changes,
+            total: changes.length,
+          },
+        };
 
       res.json(response);
 
@@ -529,26 +531,26 @@ router.delete(
   requireAuth,
   validate(userDidParamSchema, "params"),
   async (req, res) => {
-  try {
-    const { user_did } = req.params;
+    try {
+      const { user_did } = req.params;
 
-    await temporaryJetstreamManager.stopForUser(user_did);
-    await removeMonitoredFollows(user_did);
+      await temporaryJetstreamManager.stopForUser(user_did);
+      await removeMonitoredFollows(user_did);
 
-    // Trigger immediate Jetstream DID reload (don't wait 5 minutes!)
-    const { resolveHandle } = await import("../utils/handle-resolver.js");
-    const userHandle = await resolveHandle(user_did);
-    const userLabel = userHandle ? `${userHandle} (${user_did})` : user_did;
-    console.log(
-      `➖ User ${userLabel} disabled monitoring - removing DIDs from stream`,
-    );
-    await jetstreamService.reloadDIDsNow();
+      // Trigger immediate Jetstream DID reload (don't wait 5 minutes!)
+      const { resolveHandle } = await import("../utils/handle-resolver.js");
+      const userHandle = await resolveHandle(user_did);
+      const userLabel = userHandle ? `${userHandle} (${user_did})` : user_did;
+      console.log(
+        `➖ User ${userLabel} disabled monitoring - removing DIDs from stream`,
+      );
+      await jetstreamService.reloadDIDsNow();
 
-    // Confirm to the caller that monitoring is no longer active.
-    const response: APIResponse<{ message: string }> = {
-      success: true,
-      data: { message: "Monitoring disabled" },
-    };
+      // Confirm to the caller that monitoring is no longer active.
+      const response: APIResponse<{ message: string }> = {
+        success: true,
+        data: { message: "Monitoring disabled" },
+      };
 
       await broadcastMonitoringStatusUpdate();
       res.json(response);
@@ -582,87 +584,87 @@ router.delete(
   requireAuth,
   validate(userDidParamSchema, "params"),
   async (req, res) => {
-  try {
-    const { user_did } = req.params;
-
-    // Stop any temporary stream for this user to avoid race conditions
-    await temporaryJetstreamManager.stopForUser(user_did);
-
-    // Connect and perform a transactional purge for consistency
-    const { pool } = await import("../db.js");
-    const client = await pool.connect();
-    let deletedOwn = 0;
-    let deletedForFollows = 0;
-    let removedFollows = 0;
     try {
-      await client.query("BEGIN");
+      const { user_did } = req.params;
 
-      // Gather all DIDs that this user was monitoring (before removing the rows)
-      const followedRes = await client.query<{ follow_did: string }>(
-        "SELECT follow_did FROM monitored_follows WHERE user_did = $1",
-        [user_did],
-      );
-      const followedDIDs = followedRes.rows.map((r) => r.follow_did);
+      // Stop any temporary stream for this user to avoid race conditions
+      await temporaryJetstreamManager.stopForUser(user_did);
 
-      // Delete all profile changes for those followed DIDs (global contribution)
-      if (followedDIDs.length > 0) {
-        const deleteFollowsRes = await client.query(
-          "DELETE FROM profile_changes WHERE did = ANY($1)",
-          [followedDIDs],
+      // Connect and perform a transactional purge for consistency
+      const { pool } = await import("../db.js");
+      const client = await pool.connect();
+      let deletedOwn = 0;
+      let deletedForFollows = 0;
+      let removedFollows = 0;
+      try {
+        await client.query("BEGIN");
+
+        // Gather all DIDs that this user was monitoring (before removing the rows)
+        const followedRes = await client.query<{ follow_did: string }>(
+          "SELECT follow_did FROM monitored_follows WHERE user_did = $1",
+          [user_did],
         );
-        deletedForFollows = deleteFollowsRes.rowCount ?? 0;
+        const followedDIDs = followedRes.rows.map((r) => r.follow_did);
+
+        // Delete all profile changes for those followed DIDs (global contribution)
+        if (followedDIDs.length > 0) {
+          const deleteFollowsRes = await client.query(
+            "DELETE FROM profile_changes WHERE did = ANY($1)",
+            [followedDIDs],
+          );
+          deletedForFollows = deleteFollowsRes.rowCount ?? 0;
+        }
+
+        // Delete all profile changes for the user's own DID
+        const deleteOwnRes = await client.query(
+          "DELETE FROM profile_changes WHERE did = $1",
+          [user_did],
+        );
+        deletedOwn = deleteOwnRes.rowCount ?? 0;
+
+        // Remove all follows the user is monitoring
+        const removeFollowsRes = await client.query(
+          "DELETE FROM monitored_follows WHERE user_did = $1",
+          [user_did],
+        );
+        removedFollows = removeFollowsRes.rowCount ?? 0;
+
+        // Clear backfill state rows for this user
+        await client.query(
+          "DELETE FROM monitoring_backfill_state WHERE user_did = $1",
+          [user_did],
+        );
+
+        await client.query("COMMIT");
+      } catch (txnError) {
+        await client.query("ROLLBACK");
+        throw txnError;
+      } finally {
+        client.release();
       }
 
-      // Delete all profile changes for the user's own DID
-      const deleteOwnRes = await client.query(
-        "DELETE FROM profile_changes WHERE did = $1",
-        [user_did],
-      );
-      deletedOwn = deleteOwnRes.rowCount ?? 0;
+      // Trigger immediate DID reload so main Jetstream drops the user from the stream
+      await jetstreamService.reloadDIDsNow();
+      await broadcastMonitoringStatusUpdate();
 
-      // Remove all follows the user is monitoring
-      const removeFollowsRes = await client.query(
-        "DELETE FROM monitored_follows WHERE user_did = $1",
-        [user_did],
-      );
-      removedFollows = removeFollowsRes.rowCount ?? 0;
-
-      // Clear backfill state rows for this user
-      await client.query(
-        "DELETE FROM monitoring_backfill_state WHERE user_did = $1",
-        [user_did],
-      );
-
-      await client.query("COMMIT");
-    } catch (txnError) {
-      await client.query("ROLLBACK");
-      throw txnError;
-    } finally {
-      client.release();
-    }
-
-    // Trigger immediate DID reload so main Jetstream drops the user from the stream
-    await jetstreamService.reloadDIDsNow();
-    await broadcastMonitoringStatusUpdate();
-
-    // Return counts for client feedback
-    const totalDeleted = deletedOwn + deletedForFollows;
-    const response: APIResponse<{
-      message: string;
-      deletedChanges: number;
-      deletedOwnChanges: number;
-      deletedFollowChanges: number;
-      removedFollows: number;
-    }> = {
-      success: true,
-      data: {
-        message: "User data purged",
-        deletedChanges: totalDeleted,
-        deletedOwnChanges: deletedOwn,
-        deletedFollowChanges: deletedForFollows,
-        removedFollows,
-      },
-    };
+      // Return counts for client feedback
+      const totalDeleted = deletedOwn + deletedForFollows;
+      const response: APIResponse<{
+        message: string;
+        deletedChanges: number;
+        deletedOwnChanges: number;
+        deletedFollowChanges: number;
+        removedFollows: number;
+      }> = {
+        success: true,
+        data: {
+          message: "User data purged",
+          deletedChanges: totalDeleted,
+          deletedOwnChanges: deletedOwn,
+          deletedFollowChanges: deletedForFollows,
+          removedFollows,
+        },
+      };
       res.json(response);
     } catch (error) {
       console.error("Error purging user data:", error);

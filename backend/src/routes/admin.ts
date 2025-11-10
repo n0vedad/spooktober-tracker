@@ -146,34 +146,34 @@ router.post(
     try {
       const { cursor } = req.body;
 
-    // Format cursor for logging
-    let logMessage = "🚀 Admin triggered Jetstream start";
-    if (cursor) {
-      const cursorDate = new Date(cursor / 1000);
-      const formattedDate = cursorDate.toLocaleString("de-DE", {
-        timeZone: "Europe/Berlin",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-      logMessage += ` with cursor: ${cursor} (${formattedDate})`;
-    }
-    console.log(logMessage);
+      // Format cursor for logging
+      let logMessage = "🚀 Admin triggered Jetstream start";
+      if (cursor) {
+        const cursorDate = new Date(cursor / 1000);
+        const formattedDate = cursorDate.toLocaleString("de-DE", {
+          timeZone: "Europe/Berlin",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        logMessage += ` with cursor: ${cursor} (${formattedDate})`;
+      }
+      console.log(logMessage);
 
-    // Start Jetstream with optional cursor (µs); resume from position when provided
-    await jetstreamService.start(cursor);
+      // Start Jetstream with optional cursor (µs); resume from position when provided
+      await jetstreamService.start(cursor);
 
-    // Acknowledge successful Jetstream startup for admin UI feedback.
-    const response: APIResponse<{ message: string }> = {
-      success: true,
-      data: {
-        message: "Jetstream started successfully",
-      },
-    };
+      // Acknowledge successful Jetstream startup for admin UI feedback.
+      const response: APIResponse<{ message: string }> = {
+        success: true,
+        data: {
+          message: "Jetstream started successfully",
+        },
+      };
 
       // Response & error handling
       res.json(response);
@@ -236,31 +236,31 @@ router.post(
     try {
       const { did } = req.body;
 
-    // Add to ignore list
-    const result = await addIgnoredUser(did);
+      // Add to ignore list
+      const result = await addIgnoredUser(did);
 
-    // Trigger immediate Jetstream DID reload to stop monitoring this DID
-    const { resolveHandle } = await import("../utils/handle-resolver.js");
-    const userHandle = await resolveHandle(did);
-    const userLabel = userHandle ? `${userHandle} (${did})` : did;
-    console.log(
-      `🚫 Admin added ${userLabel} to ignore list - removing from Jetstream`,
-    );
-    await jetstreamService.reloadDIDsNow();
+      // Trigger immediate Jetstream DID reload to stop monitoring this DID
+      const { resolveHandle } = await import("../utils/handle-resolver.js");
+      const userHandle = await resolveHandle(did);
+      const userLabel = userHandle ? `${userHandle} (${did})` : did;
+      console.log(
+        `🚫 Admin added ${userLabel} to ignore list - removing from Jetstream`,
+      );
+      await jetstreamService.reloadDIDsNow();
 
-    // Report the DID, deleted change count, and a human-readable summary.
-    const response: APIResponse<{
-      did: string;
-      deletedChanges: number;
-      message: string;
-    }> = {
-      success: true,
-      data: {
-        did: result.did,
-        deletedChanges: result.deletedChanges ?? 0,
-        message: `User ${did} added to ignore list. Deleted ${result.deletedChanges ?? 0} profile change(s).`,
-      },
-    };
+      // Report the DID, deleted change count, and a human-readable summary.
+      const response: APIResponse<{
+        did: string;
+        deletedChanges: number;
+        message: string;
+      }> = {
+        success: true,
+        data: {
+          did: result.did,
+          deletedChanges: result.deletedChanges ?? 0,
+          message: `User ${did} added to ignore list. Deleted ${result.deletedChanges ?? 0} profile change(s).`,
+        },
+      };
 
       // Response & error handling
       res.json(response);
@@ -284,28 +284,28 @@ router.delete(
   requireAdmin,
   validate(didParamSchema, "params"),
   async (req, res) => {
-  try {
-    const { did } = req.params;
+    try {
+      const { did } = req.params;
 
-    // Remove from ignore list
-    await removeIgnoredUser(did);
+      // Remove from ignore list
+      await removeIgnoredUser(did);
 
-    // Trigger immediate Jetstream DID reload to start monitoring this DID again (if followed)
-    const { resolveHandle } = await import("../utils/handle-resolver.js");
-    const userHandle = await resolveHandle(did);
-    const userLabel = userHandle ? `${userHandle} (${did})` : did;
-    console.log(
-      `✅ Admin removed ${userLabel} from ignore list - adding back to Jetstream if followed`,
-    );
-    await jetstreamService.reloadDIDsNow();
+      // Trigger immediate Jetstream DID reload to start monitoring this DID again (if followed)
+      const { resolveHandle } = await import("../utils/handle-resolver.js");
+      const userHandle = await resolveHandle(did);
+      const userLabel = userHandle ? `${userHandle} (${did})` : did;
+      console.log(
+        `✅ Admin removed ${userLabel} from ignore list - adding back to Jetstream if followed`,
+      );
+      await jetstreamService.reloadDIDsNow();
 
-    // Confirm ignored-user removal with a simple success message payload.
-    const response: APIResponse<{ message: string }> = {
-      success: true,
-      data: {
-        message: `User ${did} removed from ignore list`,
-      },
-    };
+      // Confirm ignored-user removal with a simple success message payload.
+      const response: APIResponse<{ message: string }> = {
+        success: true,
+        data: {
+          message: `User ${did} removed from ignore list`,
+        },
+      };
 
       // Response & error handling
       res.json(response);

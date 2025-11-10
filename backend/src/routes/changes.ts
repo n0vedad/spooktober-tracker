@@ -3,6 +3,7 @@
  */
 
 import express from "express";
+import { z } from "zod";
 import type {
   APIResponse,
   GetChangesResponse,
@@ -17,7 +18,6 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import { validate } from "../validation/middleware.js";
 import { didParamSchema, submitChangeSchema } from "../validation/schemas.js";
-import { z } from "zod";
 
 const router = express.Router();
 

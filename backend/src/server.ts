@@ -14,7 +14,9 @@ import { fileURLToPath } from "url";
 import { WebSocket, WebSocketServer } from "ws";
 import { getCorsConfig, PORT } from "./config.js";
 import { initDB, pool } from "./db.js";
-import jetstreamService, { temporaryJetstreamManager } from "./jetstream-service.js";
+import jetstreamService, {
+  temporaryJetstreamManager,
+} from "./jetstream-service.js";
 import adminRouter from "./routes/admin.js";
 import changesRouter from "./routes/changes.js";
 import monitoringRouter, {
@@ -153,13 +155,20 @@ const start = async () => {
     const httpServer = createServer(app);
 
     // Create WebSocket server
-    wss = new WebSocketServer({ server: httpServer, path: "/ws", noServer: true });
+    wss = new WebSocketServer({
+      server: httpServer,
+      path: "/ws",
+      noServer: true,
+    });
 
     // Handle WebSocket upgrade with authentication
     httpServer.on("upgrade", (request, socket, head) => {
       try {
         // Parse URL to get query parameters
-        const url = new URL(request.url || "", `http://${request.headers.host}`);
+        const url = new URL(
+          request.url || "",
+          `http://${request.headers.host}`,
+        );
         const did = url.searchParams.get("did");
 
         // Validate DID format
@@ -204,41 +213,49 @@ const start = async () => {
     void broadcastMonitoringStatusUpdate();
 
     // Connect (with authenticated DID)
-    wss.on("connection", (ws: WebSocket, _request: any, authenticatedDID: string) => {
-      console.log(`✅ WebSocket connection established for ${authenticatedDID}`);
+    wss.on(
+      "connection",
+      (ws: WebSocket, _request: any, authenticatedDID: string) => {
+        console.log(
+          `✅ WebSocket connection established for ${authenticatedDID}`,
+        );
 
-      // Disconnect
-      ws.on("close", () => {
-        console.log(`🔌 WebSocket disconnected for ${authenticatedDID}`);
-      });
-
-      // Send initial cursor info
-      const cursorInfo = jetstreamService.getCursorInfo();
-      ws.send(
-        JSON.stringify({
-          type: "cursor_update",
-          data: {
-            cursor: cursorInfo,
-          },
-        }),
-      );
-
-      // Send a one-time snapshot to the newly connected client
-      getMonitoringStatusSnapshot()
-        .then((snapshot) => {
-          // Encode and deliver the initial monitoring status
-          ws.send(
-            JSON.stringify({
-              type: "monitoring_status_update",
-              data: snapshot,
-            }),
-          );
-        })
-        .catch((error) => {
-          // Log, but don't break the connection; periodic updates will follow
-          console.error("❌ Failed to send initial monitoring status:", error);
+        // Disconnect
+        ws.on("close", () => {
+          console.log(`🔌 WebSocket disconnected for ${authenticatedDID}`);
         });
-    });
+
+        // Send initial cursor info
+        const cursorInfo = jetstreamService.getCursorInfo();
+        ws.send(
+          JSON.stringify({
+            type: "cursor_update",
+            data: {
+              cursor: cursorInfo,
+            },
+          }),
+        );
+
+        // Send a one-time snapshot to the newly connected client
+        getMonitoringStatusSnapshot()
+          .then((snapshot) => {
+            // Encode and deliver the initial monitoring status
+            ws.send(
+              JSON.stringify({
+                type: "monitoring_status_update",
+                data: snapshot,
+              }),
+            );
+          })
+          .catch((error) => {
+            // Log, but don't break the connection; periodic updates will follow
+            console.error(
+              "❌ Failed to send initial monitoring status:",
+              error,
+            );
+          });
+      },
+    );
 
     // Start HTTP Server first and wait for it to be ready
     await new Promise<void>((resolve, reject) => {
