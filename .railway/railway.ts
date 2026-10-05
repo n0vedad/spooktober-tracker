@@ -42,7 +42,11 @@ export default defineRailway(() => {
   // Backend + built frontend; a single replica, because Jetstream ingestion
   // and the bubble jobs must not run twice
   const app = service("spooktober", {
-    source: github("n0vedad/spooktober-tracker", { branch: "main" }),
+    // Deploys wait until the GitHub Actions CI workflow has passed
+    source: github("n0vedad/spooktober-tracker", {
+      branch: "main",
+      checkSuites: true,
+    }),
     build: "pnpm build",
     start: "pnpm start",
     healthcheck: "/api/health",
