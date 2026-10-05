@@ -12,7 +12,7 @@ import { resetDB } from "../../test/db-helpers.js";
 import { getChangesSince, pool, recordChange } from "../db.js";
 import { verifyLabel } from "./labels.js";
 import { createOptInSync } from "./optins.js";
-import { labelsForChange, seasonOf } from "./policy.js";
+import { LABELER_DESCRIPTION, labelsForChange, seasonOf } from "./policy.js";
 import { createLabeler } from "./service.js";
 import {
   getLabelsAfter,
@@ -74,6 +74,16 @@ describe("policy", () => {
     });
     expect(seasonOf(new Date("2026-11-01T00:00:00Z"))).toBeNull();
     expect(seasonOf(new Date("2026-09-30T23:59:59Z"))).toBeNull();
+  });
+
+  it("keeps the labeler description within Bluesky's 256 graphemes", () => {
+    const graphemes = [
+      ...new Intl.Segmenter("en", { granularity: "grapheme" }).segment(
+        LABELER_DESCRIPTION,
+      ),
+    ];
+    expect(graphemes.length).toBeLessThanOrEqual(256);
+    expect(LABELER_DESCRIPTION).toMatch(/Like or follow/);
   });
 
   it("derives label values from the changed fields", () => {

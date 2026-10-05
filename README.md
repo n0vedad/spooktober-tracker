@@ -81,7 +81,7 @@ The backend also runs a Bluesky labeler as `@spooktober-labeler.katerstrophal.wo
 - Opt-in required: only accounts that **like or follow** the labeler are labeled (polled every 2 minutes). Withdrawing retracts their labels; opting in also labels earlier changes of the season and precomputes the account's bubble.
 - Enabled when `LABELER_DID` and `LABELER_SIGNING_KEY` are set
 
-One-time setup by the account owner (publishes the label definitions and adds the signing key and endpoint to the DID document; needs the account's main password and an emailed code):
+Setup by the account owner (publishes the label definitions and the profile description explaining the opt-in, both defined in `backend/src/labeler/policy.ts`, and adds the signing key and endpoint to the DID document; needs the account's main password, plus an emailed code when the DID document changes):
 
 ```
 pnpm labeler-setup                 # republish label definitions, keep the key

@@ -8,7 +8,8 @@
  *
  * 1. Logs in as the labeler account (main password; app passwords cannot
  *    change the DID document).
- * 2. Publishes the app.bsky.labeler.service record with the label definitions.
+ * 2. Publishes the app.bsky.labeler.service record with the label definitions
+ *    and the profile description explaining the opt-in.
  * 3. Adds the signing key (#atproto_label) and the labeler endpoint
  *    (#atproto_labeler) to the DID document via a PLC operation, confirmed
  *    with a code Bluesky sends to the account's email address.
@@ -20,7 +21,10 @@
 
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { LABEL_DEFINITIONS } from "../src/labeler/policy.js";
+import {
+  LABEL_DEFINITIONS,
+  LABELER_DESCRIPTION,
+} from "../src/labeler/policy.js";
 
 const LABELER_DID = "did:plc:h5wgui5fkurmgeno5mcpqfgv";
 const LABELER_ENDPOINT = "https://spooktober.katerstrophal.world";
@@ -118,6 +122,26 @@ async function main() {
     },
   });
   console.log("✅ Published the labeler service record");
+
+  // Profile description: merge into the existing profile record, keeping
+  // display name, avatar and all other fields
+  const existing = await xrpc(
+    "GET",
+    `com.atproto.repo.getRecord?repo=${LABELER_DID}&collection=app.bsky.actor.profile&rkey=self`,
+  ).catch(() => null);
+  await xrpc("POST", "com.atproto.repo.putRecord", {
+    repo: LABELER_DID,
+    collection: "app.bsky.actor.profile",
+    rkey: "self",
+    record: {
+      $type: "app.bsky.actor.profile",
+      ...existing?.value,
+      description: LABELER_DESCRIPTION,
+    },
+    // Fail instead of overwriting a concurrent profile edit
+    ...(existing?.cid ? { swapRecord: existing.cid } : {}),
+  });
+  console.log("✅ Published the profile description");
 
   // 3. DID document: signing key + labeler endpoint
   const upToDate =

@@ -56,6 +56,17 @@ export const LABEL_DEFINITIONS = [
   },
 ] as const;
 
+/**
+ * Profile description of the labeler account (published by
+ * `pnpm labeler-setup`). It explains the opt-in, which the app cannot show
+ * otherwise. Bluesky allows at most 256 graphemes.
+ */
+export const LABELER_DESCRIPTION = [
+  "🎃 Spooktober labels for profile changes in October.",
+  "Like or follow this account to get labeled - unlike/unfollow removes your labels.",
+  "Subscribe to see the labels everywhere. 👻",
+].join("\n");
+
 export type LabelValue = (typeof LABEL_DEFINITIONS)[number]["identifier"];
 export const LABEL_VALUES = LABEL_DEFINITIONS.map((d) => d.identifier);
 
