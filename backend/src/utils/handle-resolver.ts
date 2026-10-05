@@ -20,47 +20,71 @@ function setCacheEntry(did: string, handle: string | null) {
   handleCache.set(did, handle);
 }
 
-// Minimal PLC audit log entry shape (fields used by resolver)
+// PLC audit log entry (`/<did>/log/audit`, ordered oldest first)
 interface PLCAuditLogEntry {
-  alsoKnownAs?: string[];
-  createdAt?: string;
+  createdAt: string;
+  nullified?: boolean;
+  operation: {
+    // Current operation format
+    alsoKnownAs?: string[];
+    // Legacy `create` operation format
+    handle?: string;
+  };
+}
+
+// A handle switch in the PLC log must be this close to the identity event
+const PLC_MATCH_WINDOW_MS = 15 * 60 * 1000;
+
+// Extract the handle an audit log operation assigns (null if none).
+function handleOf(entry: PLCAuditLogEntry): string | null {
+  const alias = entry.operation.alsoKnownAs?.find((a) => a.startsWith("at://"));
+  if (alias) return alias.slice("at://".length);
+  return entry.operation.handle ?? null;
 }
 
 /**
- * Get previous handle from PLC audit log.
+ * Find the handle a did:plc account used right before switching to
+ * `newHandle`, based on the PLC audit log.
  *
- * @param did DID to check.
- * @returns Previous handle or null if not found.
+ * Only answers when the log's latest handle switch is to `newHandle` and
+ * happened close to `eventTime`; otherwise the identity event is not a fresh
+ * rename (e.g. a resync or key rotation) and null is returned.
+ *
+ * @param did Account DID.
+ * @param newHandle Handle announced by the identity event.
+ * @param eventTime Time of the identity event.
+ * @param fetchFn Fetch implementation (injectable for tests).
+ * @returns Previous handle, or null when unknown.
  */
-export async function getPreviousHandleFromAuditLog(
+export async function findPreviousHandle(
   did: string,
+  newHandle: string,
+  eventTime: Date,
+  fetchFn: typeof fetchWithTimeout = fetchWithTimeout,
 ): Promise<string | null> {
-  if (!did.startsWith("did:plc:")) {
-    return null;
-  }
+  if (!did.startsWith("did:plc:")) return null;
 
-  // Fetch PLC audit log for the DID to inspect prior handles
   try {
-    const url = `https://plc.directory/${did}/log`;
-    const response = await fetchWithTimeout(url);
+    const response = await fetchFn(`https://plc.directory/${did}/log/audit`);
+    if (!response.ok) return null;
+    const log = ((await response.json()) as PLCAuditLogEntry[]).filter(
+      (entry) => !entry.nullified,
+    );
 
-    // Parse JSON payload as PLC audit log entries
-    if (!response.ok) {
+    // The log must already end on the new handle
+    const latest = log.at(-1);
+    if (!latest || handleOf(latest) !== newHandle) return null;
+
+    // Walk back to the operation that introduced the new handle
+    let i = log.length - 1;
+    while (i > 0 && handleOf(log[i - 1]) === newHandle) i--;
+    if (i === 0) return null;
+
+    const switchedAt = new Date(log[i].createdAt).getTime();
+    if (Math.abs(switchedAt - eventTime.getTime()) > PLC_MATCH_WINDOW_MS) {
       return null;
     }
-    const log = (await response.json()) as PLCAuditLogEntry[];
-
-    // Log is sorted newest first, so check the second entry for previous handle
-    if (log.length >= 2) {
-      const previousEntry = log[1];
-      const alias = previousEntry.alsoKnownAs?.find((entry) =>
-        entry.includes("at://"),
-      );
-      return alias ? alias.split("//")[1] : null;
-    }
-    return null;
-
-    // Error handling
+    return handleOf(log[i - 1]);
   } catch (error) {
     console.warn(`Failed to get audit log for ${did}:`, error);
     return null;
@@ -68,7 +92,30 @@ export async function getPreviousHandleFromAuditLog(
 }
 
 /**
- * Resolve a DID to its known handle via PLC or did:web documents.
+ * Read the handle currently claimed in a DID document, bypassing the cache.
+ *
+ * @param did DID to resolve (did:plc or did:web).
+ * @param fetchFn Fetch implementation (injectable for tests).
+ * @returns Handle string, or null when the lookup fails or none is set.
+ * @throws On network errors, so callers can retry.
+ */
+export async function fetchCurrentHandle(
+  did: string,
+  fetchFn: typeof fetchWithTimeout = fetchWithTimeout,
+): Promise<string | null> {
+  const url = did.startsWith("did:web:")
+    ? `https://${did.slice("did:web:".length)}/.well-known/did.json`
+    : `https://plc.directory/${did}`;
+  const response = await fetchFn(url);
+  if (!response.ok) return null;
+
+  const doc = (await response.json()) as { alsoKnownAs?: string[] };
+  const alias = doc.alsoKnownAs?.find((entry) => entry.startsWith("at://"));
+  return alias ? alias.slice("at://".length) : null;
+}
+
+/**
+ * Resolve a DID to its known handle via PLC or did:web documents (cached).
  *
  * @param did DID to resolve.
  * @returns Handle string or null when lookup fails.
@@ -78,33 +125,11 @@ export async function resolveHandle(did: string): Promise<string | null> {
     return handleCache.get(did) ?? null;
   }
 
-  // Resolve handles
+  // Cache negative lookups too, so failing DIDs aren't refetched immediately
   try {
-    const url = did.startsWith("did:web")
-      ? `https://${did.split(":")[2]}/.well-known/did.json`
-      : `https://plc.directory/${did}`;
-    const response = await fetchWithTimeout(url);
-
-    // Cache negative lookups to avoid repeated failed fetches.
-    if (!response.ok) {
-      setCacheEntry(did, null);
-      return null;
-    }
-
-    // Parse DID document to inspect alsoKnownAs entries
-    const doc = (await response.json()) as {
-      alsoKnownAs?: string[];
-    };
-
-    // Extract at-proto handle (at://...) from alsoKnownAs
-    const alias = doc.alsoKnownAs?.find((entry) => entry.includes("at://"));
-    const handle = alias ? alias.split("//")[1] : null;
-
-    // Store the resolved handle (or null) for faster subsequent lookups.
-    setCacheEntry(did, handle ?? null);
-    return handle ?? null;
-
-    // Cache failure state so repeated errors aren't triggered immediately again.
+    const handle = await fetchCurrentHandle(did);
+    setCacheEntry(did, handle);
+    return handle;
   } catch (error) {
     console.warn(`Failed to resolve handle for ${did}:`, error);
     setCacheEntry(did, null);

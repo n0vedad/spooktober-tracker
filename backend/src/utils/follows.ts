@@ -111,25 +111,43 @@ export async function fetchFollowsFromBluesky(
   }
 }
 
+// How long a fetched follow list is reused
+const FOLLOWS_TTL_MS = 10 * 60 * 1000;
+// Upper bound on cached users (oldest entry is evicted first)
+const MAX_CACHED_USERS = 1000;
+const followsCache = new Map<string, { fetchedAt: number; dids: string[] }>();
+
 /**
- * Fetch follows for multiple users in parallel.
+ * Get the DIDs a user follows, cached for a few minutes.
  *
- * @param userDIDs Array of user DIDs to fetch follows for.
- * @returns Map of userDID -> follows array.
+ * @param userDID The DID of the user whose follows to load.
+ * @param fetchFn Follow fetcher (injectable for tests).
+ * @returns Array of followed DIDs.
  */
-export async function fetchFollowsForUsers(
-  userDIDs: string[],
-): Promise<Map<string, Follow[]>> {
-  const results = new Map<string, Follow[]>();
+export async function getFollowDIDs(
+  userDID: string,
+  fetchFn: (did: string) => Promise<Follow[]> = fetchFollowsFromBluesky,
+): Promise<string[]> {
+  const cached = followsCache.get(userDID);
+  if (cached && Date.now() - cached.fetchedAt < FOLLOWS_TTL_MS) {
+    return cached.dids;
+  }
 
-  // Fetch all follows in parallel
-  const promises = userDIDs.map(async (userDID) => {
-    const follows = await fetchFollowsFromBluesky(userDID);
-    results.set(userDID, follows);
-  });
+  const dids = (await fetchFn(userDID)).map((f) => f.did);
+  followsCache.delete(userDID);
+  if (followsCache.size >= MAX_CACHED_USERS) {
+    const oldest = followsCache.keys().next().value;
+    if (oldest !== undefined) followsCache.delete(oldest);
+  }
+  followsCache.set(userDID, { fetchedAt: Date.now(), dids });
+  return dids;
+}
 
-  // Wait for all parallel fetches to finish
-  await Promise.all(promises);
-  // Return mapping: user DID -> follows array
-  return results;
+/**
+ * Drop a user's cached follow list so the next request refetches it.
+ *
+ * @param userDID User DID.
+ */
+export function invalidateFollows(userDID: string): void {
+  followsCache.delete(userDID);
 }

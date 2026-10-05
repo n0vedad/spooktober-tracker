@@ -9,5 +9,5 @@ process.env.DATABASE_URL = inject("databaseUrl");
 process.env.DATABASE_POOL_MAX = "1";
 process.env.PORT ??= "3999";
 process.env.ADMIN_DID ??= "did:plc:testadmin";
-process.env.JETSTREAM_HOSTS ??= "jetstream.invalid";
+process.env.JETSTREAM_URL ??= "https://jetstream.invalid";
 process.env.DEV_CORS_ORIGINS ??= "http://localhost";

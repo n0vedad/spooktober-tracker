@@ -6,11 +6,11 @@ import express from "express";
 import type { APIResponse } from "../../../shared/types.js";
 import {
   addIgnoredUser,
-  getAllMonitoredDIDs,
+  countSnapshots,
   getIgnoredUsers,
   removeIgnoredUser,
 } from "../db.js";
-import jetstreamService from "../jetstream-service.js";
+import { ingester } from "../ingest/index.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
 import { validate } from "../validation/middleware.js";
@@ -23,26 +23,22 @@ import {
 // Create Router
 const router = express.Router();
 
+// Last event older than this counts as "catching up" rather than live
+const LIVE_THRESHOLD_MS = 60_000;
+
 /**
  * GET /api/admin/stats
- * Get monitoring statistics
+ * Ingestion statistics
  */
-router.get("/stats", requireAdmin, async (req, res) => {
+router.get("/stats", requireAdmin, async (_req, res) => {
   try {
-    const monitoredDIDs = await getAllMonitoredDIDs();
+    const status = ingester.status();
+    const trackedAccounts = await countSnapshots();
+    const lastEventMs = status.lastEventTime
+      ? Date.parse(status.lastEventTime)
+      : null;
 
-    // Get user count
-    const { pool } = await import("../db.js");
-    const userCountResult = await pool.query(
-      "SELECT COUNT(DISTINCT user_did) as count FROM monitored_follows",
-    );
-
-    // Get cursor info
-    const cursorInfo = jetstreamService.getCursorInfo();
-    const uptimeInfo = jetstreamService.getUptimeInfo();
-    const mainStreamStatus = jetstreamService.getMainStreamStatus();
-
-    // Compose admin stats snapshot payload for the client.
+    // Field names kept compatible with the current admin panel
     const response: APIResponse<{
       totalMonitoredDIDs: number;
       totalMonitoringUsers: number;
@@ -50,21 +46,23 @@ router.get("/stats", requireAdmin, async (req, res) => {
       cursorTimestamp: string | null;
       isInBackfill: boolean;
       uptimeSeconds: number | null;
+      ingestion: typeof status;
     }> = {
       success: true,
       data: {
-        totalMonitoredDIDs: monitoredDIDs.length,
-        totalMonitoringUsers: parseInt(userCountResult.rows[0].count),
-        jetstreamStatus: mainStreamStatus.isRunning
-          ? "connected"
-          : "disconnected",
-        cursorTimestamp: cursorInfo?.timestamp || null,
-        isInBackfill: cursorInfo?.isInBackfill ?? false,
-        uptimeSeconds: uptimeInfo?.uptimeSeconds || null,
+        totalMonitoredDIDs: trackedAccounts,
+        totalMonitoringUsers: 0,
+        jetstreamStatus: status.running ? "connected" : "disconnected",
+        cursorTimestamp: status.lastEventTime,
+        isInBackfill:
+          lastEventMs !== null && Date.now() - lastEventMs > LIVE_THRESHOLD_MS,
+        uptimeSeconds: status.startedAt
+          ? Math.floor((Date.now() - Date.parse(status.startedAt)) / 1000)
+          : null,
+        ingestion: status,
       },
     };
 
-    // Response & error handling
     res.json(response);
   } catch (error) {
     console.error("Error fetching admin stats:", error);
@@ -78,22 +76,16 @@ router.get("/stats", requireAdmin, async (req, res) => {
 
 /**
  * POST /api/admin/jetstream/stop
- * Stop Jetstream (emergency stop)
+ * Stop ingestion (persists the cursor for a later resume)
  */
-router.post("/jetstream/stop", requireAdmin, async (req, res) => {
+router.post("/jetstream/stop", requireAdmin, async (_req, res) => {
   try {
     console.log("🛑 Admin triggered Jetstream stop");
-    await jetstreamService.stop();
-
-    // Acknowledge successful Jetstream shutdown for admin UI feedback.
+    await ingester.stop();
     const response: APIResponse<{ message: string }> = {
       success: true,
-      data: {
-        message: "Jetstream stopped successfully",
-      },
+      data: { message: "Jetstream stopped successfully" },
     };
-
-    // Response & error handling
     res.json(response);
   } catch (error) {
     console.error("Error stopping Jetstream:", error);
@@ -107,36 +99,23 @@ router.post("/jetstream/stop", requireAdmin, async (req, res) => {
 
 /**
  * GET /api/admin/jetstream/recommended-cursor
- * Get recommended cursor for starting Jetstream
+ * Unix-microsecond cursor of the last processed event (or now)
  */
-router.get("/jetstream/recommended-cursor", requireAdmin, async (req, res) => {
-  try {
-    const recommendedCursor =
-      await jetstreamService.getRecommendedStartCursor();
-
-    // Return recommended start cursor for Jetstream startup.
-    const response: APIResponse<{ cursor: number }> = {
-      success: true,
-      data: {
-        cursor: recommendedCursor,
-      },
-    };
-
-    // Response & error handling
-    res.json(response);
-  } catch (error) {
-    console.error("Error getting recommended cursor:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to get recommended cursor",
-    };
-    res.status(500).json(response);
-  }
+router.get("/jetstream/recommended-cursor", requireAdmin, (_req, res) => {
+  const { lastEventTime } = ingester.status();
+  const cursor =
+    (lastEventTime ? Date.parse(lastEventTime) : Date.now()) * 1000;
+  const response: APIResponse<{ cursor: number }> = {
+    success: true,
+    data: { cursor },
+  };
+  res.json(response);
 });
 
 /**
  * POST /api/admin/jetstream/start
- * Start Jetstream with optional cursor
+ * Start ingestion. Optional cursor: v2 seq or unix microseconds (>= 1e15);
+ * without one, ingestion resumes from the stored cursor.
  */
 router.post(
   "/jetstream/start",
@@ -144,38 +123,25 @@ router.post(
   validate(jetstreamStartBodySchema),
   async (req, res) => {
     try {
-      const { cursor } = req.body;
-
-      // Format cursor for logging
-      let logMessage = "🚀 Admin triggered Jetstream start";
-      if (cursor) {
-        const cursorDate = new Date(cursor / 1000);
-        const formattedDate = cursorDate.toLocaleString("de-DE", {
-          timeZone: "Europe/Berlin",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        });
-        logMessage += ` with cursor: ${cursor} (${formattedDate})`;
+      if (ingester.status().running) {
+        const response: APIResponse<never> = {
+          success: false,
+          error: "Jetstream is already running",
+        };
+        res.status(409).json(response);
+        return;
       }
-      console.log(logMessage);
 
-      // Start Jetstream with optional cursor (µs); resume from position when provided
-      await jetstreamService.start(cursor);
+      const { cursor } = req.body as { cursor?: number };
+      console.log(
+        `🚀 Admin triggered Jetstream start${cursor ? ` with cursor ${cursor}` : ""}`,
+      );
+      await ingester.start(cursor);
 
-      // Acknowledge successful Jetstream startup for admin UI feedback.
       const response: APIResponse<{ message: string }> = {
         success: true,
-        data: {
-          message: "Jetstream started successfully",
-        },
+        data: { message: "Jetstream started successfully" },
       };
-
-      // Response & error handling
       res.json(response);
     } catch (error) {
       console.error("Error starting Jetstream:", error);
@@ -239,14 +205,7 @@ router.post(
       // Add to ignore list
       const result = await addIgnoredUser(did);
 
-      // Trigger immediate Jetstream DID reload to stop monitoring this DID
-      const { resolveHandle } = await import("../utils/handle-resolver.js");
-      const userHandle = await resolveHandle(did);
-      const userLabel = userHandle ? `${userHandle} (${did})` : did;
-      console.log(
-        `🚫 Admin added ${userLabel} to ignore list - removing from Jetstream`,
-      );
-      await jetstreamService.reloadDIDsNow();
+      console.log(`🚫 Admin added ${did} to ignore list`);
 
       // Report the DID, deleted change count, and a human-readable summary.
       const response: APIResponse<{
@@ -290,14 +249,7 @@ router.delete(
       // Remove from ignore list
       await removeIgnoredUser(did);
 
-      // Trigger immediate Jetstream DID reload to start monitoring this DID again (if followed)
-      const { resolveHandle } = await import("../utils/handle-resolver.js");
-      const userHandle = await resolveHandle(did);
-      const userLabel = userHandle ? `${userHandle} (${did})` : did;
-      console.log(
-        `✅ Admin removed ${userLabel} from ignore list - adding back to Jetstream if followed`,
-      );
-      await jetstreamService.reloadDIDsNow();
+      console.log(`✅ Admin removed ${did} from ignore list`);
 
       // Confirm ignored-user removal with a simple success message payload.
       const response: APIResponse<{ message: string }> = {

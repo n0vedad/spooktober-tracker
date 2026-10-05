@@ -3,136 +3,52 @@
  */
 
 import express from "express";
-import { z } from "zod";
-import type {
-  APIResponse,
-  GetChangesResponse,
-  SubmitChangeRequest,
-} from "../../../shared/types.js";
-import {
-  getAllChanges,
-  getChangeHistory,
-  getChangesByDIDs,
-  insertChange,
-} from "../db.js";
+import type { APIResponse, GetChangesResponse } from "../../../shared/types.js";
+import { getChangeHistory, getChanges } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validate } from "../validation/middleware.js";
-import { didParamSchema, submitChangeSchema } from "../validation/schemas.js";
+import {
+  changesPageQuerySchema,
+  didParamSchema,
+} from "../validation/schemas.js";
 
 const router = express.Router();
 
 /**
- * GET /api/changes
- * Get all profile changes (requires login)
+ * GET /api/changes?limit=50&before=<id>
+ * Newest profile changes across the network (requires login)
  */
-router.get("/", requireAuth, async (req, res) => {
-  try {
-    const changes = await getAllChanges();
+router.get(
+  "/",
+  requireAuth,
+  validate(changesPageQuerySchema, "query"),
+  async (req, res) => {
+    try {
+      const { limit, before } = req.query as unknown as {
+        limit: number;
+        before?: number;
+      };
+      const changes = await getChanges({ limit, beforeId: before });
 
-    // Respond with complete change list.
-    const response: APIResponse<GetChangesResponse> = {
-      success: true,
-      data: {
-        changes,
-      },
-    };
+      // Respond with one page of changes, newest first.
+      const response: APIResponse<GetChangesResponse> = {
+        success: true,
+        data: {
+          changes,
+        },
+      };
 
-    // Auth check
-    res.json(response);
-  } catch (error) {
-    console.error("Error fetching changes:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to fetch changes",
-    };
-    res.status(500).json(response);
-  }
-});
-
-// Schema for query endpoint
-const queryChangesSchema = z.object({
-  dids: z.array(z.string().regex(/^did:(plc|web):[a-z0-9.-]+$/)).optional(),
-});
-
-/**
- * POST /api/changes/query
- * Query profile changes by DIDs (use POST to avoid URL length limits)
- * Body: { dids: string[] }
- */
-router.post("/query", validate(queryChangesSchema), async (req, res) => {
-  try {
-    const { dids } = req.body as { dids?: string[] };
-
-    // Fetch only the requested DIDs when a filter is provided.
-    let changes;
-    if (dids && dids.length > 0) {
-      changes = await getChangesByDIDs(dids);
-
-      // Otherwise return the complete change history.
-    } else {
-      changes = await getAllChanges();
-    }
-
-    // Send back the assembled change payload.
-    const response: APIResponse<GetChangesResponse> = {
-      success: true,
-      data: {
-        changes,
-      },
-    };
-
-    res.json(response);
-
-    // Surface a generic failure response to callers on unexpected errors.
-  } catch (error) {
-    console.error("Error querying changes:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to query changes",
-    };
-    res.status(500).json(response);
-  }
-});
-
-/**
- * POST /api/changes
- * Submit a new profile change
- * Body: SubmitChangeRequest
- */
-router.post("/", validate(submitChangeSchema), async (req, res) => {
-  try {
-    const change: SubmitChangeRequest = req.body;
-
-    // Insert the new change record into persistence layer.
-    const result = await insertChange(change);
-
-    // If result is null, the DID was ignored
-    if (!result) {
+      res.json(response);
+    } catch (error) {
+      console.error("Error fetching changes:", error);
       const response: APIResponse<never> = {
         success: false,
-        error: "DID is on the ignored list",
+        error: "Failed to fetch changes",
       };
-      return res.status(403).json(response);
+      res.status(500).json(response);
     }
-
-    // Echo back the stored change (including generated metadata).
-    const response: APIResponse<typeof result> = {
-      success: true,
-      data: result,
-    };
-
-    res.json(response);
-
-    // Unhandled issues result in a generic server error for the client.
-  } catch (error) {
-    console.error("Error submitting change:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to submit change",
-    };
-    res.status(500).json(response);
-  }
-});
+  },
+);
 
 /**
  * GET /api/changes/:did/history

@@ -26,25 +26,24 @@ export const userDidParamSchema = z.object({
   user_did: didSchema,
 });
 
-// Changes endpoints
-export const getChangesQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().max(1000).optional(),
-  offset: z.coerce.number().int().nonnegative().optional(),
+// Changes endpoints (keyset pagination: `before` is the oldest id already seen)
+export const changesPageQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  before: z.coerce.number().int().positive().optional(),
 });
 
 // Monitoring endpoints
 export const enableMonitoringBodySchema = z.object({
-  follows: z.array(
-    z.object({
-      did: didSchema,
-      handle: handleSchema,
-      rkey: z.string().optional(),
-    }),
-  ),
-});
-
-export const getFollowsQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().max(1000).optional(),
+  user_did: didSchema,
+  follows: z
+    .array(
+      z.object({
+        did: didSchema,
+        handle: handleSchema,
+        rkey: z.string().optional(),
+      }),
+    )
+    .min(1, "At least one follow is required"),
 });
 
 // Admin endpoints
@@ -54,21 +53,4 @@ export const jetstreamStartBodySchema = z.object({
 
 export const addIgnoredUserBodySchema = z.object({
   did: didSchema,
-});
-
-// WebSocket query parameters (from URL query string)
-export const wsQuerySchema = z.object({
-  did: didSchema,
-});
-
-// Profile change submission
-export const submitChangeSchema = z.object({
-  did: didSchema,
-  handle: handleSchema.optional(),
-  old_handle: handleSchema.optional(),
-  new_handle: handleSchema.optional(),
-  old_display_name: z.string().optional(),
-  new_display_name: z.string().optional(),
-  old_avatar: z.string().optional(),
-  new_avatar: z.string().optional(),
 });

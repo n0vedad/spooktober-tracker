@@ -86,26 +86,6 @@ const parseCorsList = (
   return { allowAll: false, origins };
 };
 
-/**
- * Parse a comma-separated list of hostnames.
- *
- * @param raw Raw env value.
- * @param name Env variable name for error context.
- * @returns Non-empty list of hostnames.
- */
-const parseHostList = (raw: string, name: string): string[] => {
-  const hosts = raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-  // Require at least one Jetstream host entry
-  if (hosts.length === 0) {
-    throw new Error(`${name} must list at least one Jetstream host.`);
-  }
-  return hosts;
-};
-
 // Database connection string.
 export const DATABASE_URL = requireEnv("DATABASE_URL");
 // HTTP listen port.
@@ -148,8 +128,6 @@ export const getCorsConfig = (): { allowAll: boolean; origins: string[] } => {
   return DEV_CORS;
 };
 
-// Jetstream websocket hosts to connect to (comma-separated).
-export const JETSTREAM_HOSTS = parseHostList(
-  requireEnv("JETSTREAM_HOSTS"),
-  "JETSTREAM_HOSTS",
-);
+// Jetstream v2 instance to consume (live tail needs no API key).
+export const JETSTREAM_URL =
+  optionalEnv("JETSTREAM_URL") ?? "https://jetstream.us-east.bsky.network";
