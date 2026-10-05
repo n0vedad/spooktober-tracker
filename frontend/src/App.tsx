@@ -9,6 +9,7 @@ import { Toaster } from "solid-toast";
 import { AdminPanel } from "./AdminPanel";
 import { getMe, getMyFollows, logout, startLogin, type Me } from "./api";
 import { HandleTypeahead } from "./HandleTypeahead";
+import { LabelerOptIn } from "./LabelerOptIn";
 import { SpooktoberTracker } from "./SpooktoberTracker";
 
 // Pairing of a DID with its corresponding handle returned from follow lookups.
@@ -337,6 +338,9 @@ const App = () => {
 
               <Show when={login.me()}>
                 <div class="flex flex-col items-center">
+                  {/* Labeler opt-in hint or confirmation */}
+                  <LabelerOptIn />
+
                   {/* Admin Panel */}
                   <Show when={login.me()?.isAdmin}>
                     <AdminPanel />

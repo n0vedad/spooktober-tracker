@@ -156,6 +156,35 @@ export async function getMyChanges(
 }
 
 /**
+ * Opt-in state of the signed-in user for the labeler.
+ */
+export interface LabelerStatus {
+  enabled: boolean;
+  did?: string;
+  handle?: string | null;
+  // "like", "follow" or "like+follow"; null when not opted in
+  optedInVia?: string | null;
+}
+
+/**
+ * Whether the signed-in user liked or follows the labeler.
+ */
+export async function getLabelerStatus(): Promise<LabelerStatus> {
+  return request<LabelerStatus>("/me/labeler", {}, "Failed to load labeler");
+}
+
+/**
+ * Check likes/follows of the labeler now (instead of at the next poll).
+ */
+export async function refreshLabelerStatus(): Promise<LabelerStatus> {
+  return request<LabelerStatus>(
+    "/me/labeler/refresh",
+    { method: "POST" },
+    "Could not check right now, please try again in a minute",
+  );
+}
+
+/**
  * Get change history for a specific DID.
  *
  * @param did DID whose history will be retrieved.
