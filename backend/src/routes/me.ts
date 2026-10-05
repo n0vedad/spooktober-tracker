@@ -10,6 +10,9 @@ import { bubbleService } from "../bubble/index.js";
 import type { BubbleStatus } from "../bubble/service.js";
 import { getChangesInScope } from "../bubble/store.js";
 import { purgeAccount } from "../db.js";
+import { labeler, optInSync } from "../labeler/index.js";
+import { getOptIn } from "../labeler/store.js";
+import { resolveHandle } from "../utils/handle-resolver.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getFollows, invalidateFollows } from "../utils/follows.js";
 import { validate } from "../validation/middleware.js";
@@ -147,6 +150,73 @@ router.get(
     }
   },
 );
+
+// On-demand opt-in checks run at most this often (across all users)
+const OPT_IN_REFRESH_MIN_AGE_MS = 15_000;
+
+/**
+ * Opt-in state of the signed-in user for the labeler.
+ */
+interface LabelerStatus {
+  enabled: boolean;
+  did?: string;
+  handle?: string | null;
+  // How the user opted in, or null when not opted in
+  optedInVia?: string | null;
+}
+
+async function labelerStatus(did: string): Promise<LabelerStatus> {
+  if (!labeler) return { enabled: false };
+  return {
+    enabled: true,
+    did: labeler.did,
+    handle: await resolveHandle(labeler.did),
+    optedInVia: await getOptIn(did),
+  };
+}
+
+/**
+ * GET /api/me/labeler
+ * Whether the signed-in user opted in to the labeler (like or follow).
+ */
+router.get("/labeler", async (req, res) => {
+  try {
+    const response: APIResponse<LabelerStatus> = {
+      success: true,
+      data: await labelerStatus(req.did!),
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error loading labeler status:", error);
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Failed to load labeler status",
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * POST /api/me/labeler/refresh
+ * Check likes/follows of the labeler now instead of at the next poll.
+ */
+router.post("/labeler/refresh", async (req, res) => {
+  try {
+    await optInSync?.syncIfStale(OPT_IN_REFRESH_MIN_AGE_MS);
+    const response: APIResponse<LabelerStatus> = {
+      success: true,
+      data: await labelerStatus(req.did!),
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error refreshing opt-ins:", error);
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Could not check right now, please try again in a minute",
+    };
+    res.status(502).json(response);
+  }
+});
 
 /**
  * DELETE /api/me/data

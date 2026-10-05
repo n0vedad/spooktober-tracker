@@ -275,6 +275,30 @@ describe("opt-in sync", () => {
     expect((await getOptIns()).size).toBe(6);
   });
 
+  it("throttles on-demand syncs", async () => {
+    const fetchFollowers = vi.fn(async () => [ALICE]);
+    const sync = createOptInSync({
+      labeler: {
+        did: LABELER,
+        onOptIn: vi.fn(async () => []),
+        onOptOut: vi.fn(),
+      },
+      fetchFollowers,
+      fetchLikers: async () => [],
+      getOptIns,
+      saveOptIn,
+      removeOptIn,
+      log: quiet,
+    });
+
+    await sync.syncIfStale(60_000);
+    await sync.syncIfStale(60_000);
+    expect(fetchFollowers).toHaveBeenCalledTimes(1);
+
+    await sync.syncIfStale(0);
+    expect(fetchFollowers).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the previous state when fetching fails", async () => {
     await saveOptIn(ALICE, "like");
     const sync = createOptInSync({

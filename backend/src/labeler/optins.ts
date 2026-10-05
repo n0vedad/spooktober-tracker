@@ -108,6 +108,7 @@ export function createOptInSync(deps: OptInSyncDeps) {
   const log = deps.log ?? console;
   let timer: NodeJS.Timeout | null = null;
   let running: Promise<void> | null = null;
+  let lastSyncAt = 0;
 
   async function syncOnce(): Promise<void> {
     const [followers, likers] = await Promise.all([
@@ -155,8 +156,19 @@ export function createOptInSync(deps: OptInSyncDeps) {
   function sync(): Promise<void> {
     running ??= syncOnce().finally(() => {
       running = null;
+      lastSyncAt = Date.now();
     });
     return running;
+  }
+
+  /**
+   * Sync unless the last pass is younger than `minAgeMs` (on-demand checks
+   * from users must not hammer the AppView).
+   */
+  function syncIfStale(minAgeMs: number): Promise<void> {
+    if (!running && Date.now() - lastSyncAt < minAgeMs)
+      return Promise.resolve();
+    return sync();
   }
 
   function start(intervalMs: number) {
@@ -172,5 +184,5 @@ export function createOptInSync(deps: OptInSyncDeps) {
     timer = null;
   }
 
-  return { sync, start, stop };
+  return { sync, syncIfStale, start, stop };
 }

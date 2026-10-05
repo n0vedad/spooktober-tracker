@@ -11,6 +11,8 @@ import {
 import { bubbleService } from "./bubble/index.js";
 import { saveBubble } from "./bubble/store.js";
 import { flagNoisy, getChangeHistory, pool, recordChange } from "./db.js";
+import { optInSync } from "./labeler/index.js";
+import { saveOptIn } from "./labeler/store.js";
 
 const ALICE = "did:plc:alice";
 const BOB = "did:plc:bob";
@@ -54,6 +56,12 @@ vi.mock("./bubble/index.js", () => ({
       computedAt: "2026-10-05T12:00:00.000Z",
     })),
   },
+}));
+
+// A configured labeler whose opt-in sync can be triggered on demand
+vi.mock("./labeler/index.js", () => ({
+  labeler: { did: "did:plc:labeler" },
+  optInSync: { syncIfStale: vi.fn(async () => {}) },
 }));
 
 // Keep the real Jetstream client out of route tests
@@ -301,6 +309,38 @@ describe("/api/me", () => {
 
     expect(res.body.data.state).toBe("ready");
     expect(bubbleService.ensure).toHaveBeenCalledWith(BOB, true);
+  });
+
+  it("reports whether the user opted in to the labeler", async () => {
+    const cookie = await loginAs(BOB);
+
+    const before = await request(app)
+      .get("/api/me/labeler")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(before.body.data).toEqual({
+      enabled: true,
+      did: "did:plc:labeler",
+      handle: null,
+      optedInVia: null,
+    });
+
+    await saveOptIn(BOB, "follow");
+    const after = await request(app)
+      .get("/api/me/labeler")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(after.body.data.optedInVia).toBe("follow");
+  });
+
+  it("checks likes/follows on demand", async () => {
+    const res = await request(app)
+      .post("/api/me/labeler/refresh")
+      .set("Cookie", await loginAs(BOB))
+      .expect(200);
+
+    expect(optInSync!.syncIfStale).toHaveBeenCalledWith(15_000);
+    expect(res.body.data.enabled).toBe(true);
   });
 
   it("rejects unknown scopes", async () => {

@@ -157,6 +157,19 @@ export async function getOptIns(): Promise<Map<string, string>> {
 }
 
 /**
+ * How an account opted in ("like", "follow", "like+follow"), or null.
+ *
+ * @param did Account DID.
+ */
+export async function getOptIn(did: string): Promise<string | null> {
+  const result = await pool.query<{ via: string }>(
+    "SELECT via FROM labeler_optins WHERE did = $1",
+    [did],
+  );
+  return result.rows[0]?.via ?? null;
+}
+
+/**
  * Whether an account opted in to being labeled.
  *
  * @param did Account DID.
