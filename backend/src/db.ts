@@ -74,8 +74,9 @@ export const pool = new Pool({
 });
 
 // Prevent the Node process from crashing when Postgres drops idle connections.
+// Log only the message: the error object references the whole client.
 pool.on("error", (error) => {
-  console.error("❌ Unexpected Postgres error on idle client:", error);
+  console.error("❌ Unexpected Postgres error on idle client:", error.message);
 });
 
 /**
