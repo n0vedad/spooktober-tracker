@@ -72,6 +72,18 @@ pnpm start
 ```
 `pnpm start` runs `node dist/backend/src/server.js`.
 
+## Deployment (Railway)
+
+The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code): Postgres (pinned to the Postgres 17 image of the existing volume) and the app service, which deploys `main` from GitHub with `pnpm build` / `pnpm start`.
+
+```
+railway config plan     # preview
+OAUTH_PRIVATE_KEY_JWK="$(pnpm --silent --filter backend gen-key)" railway config apply   # first apply
+railway config apply    # later applies keep the stored key
+```
+
+The custom domain `spooktober.katerstrophal.world` is registered in Railway directly (not supported by the IaC file).
+
 ## Workspace Scripts
 
 ```
