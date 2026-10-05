@@ -84,7 +84,8 @@ The backend also runs a Bluesky labeler as `@spooktober-labeler.katerstrophal.wo
 One-time setup by the account owner (publishes the label definitions and adds the signing key and endpoint to the DID document; needs the account's main password and an emailed code):
 
 ```
-pnpm --filter backend labeler-setup <did:key of LABELER_SIGNING_KEY>
+pnpm labeler-setup                 # republish label definitions, keep the key
+pnpm labeler-setup <did:key>       # first setup or key rotation
 ```
 
 ## Deployment (Railway)

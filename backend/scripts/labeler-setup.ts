@@ -1,7 +1,10 @@
 /**
  * One-time setup of the labeler account (run interactively by its owner):
  *
- *   pnpm --filter backend labeler-setup <did:key of LABELER_SIGNING_KEY>
+ *   pnpm labeler-setup [did:key of LABELER_SIGNING_KEY]
+ *
+ * Without a did:key, the signing key already in the DID document is kept
+ * (e.g. to republish changed label definitions); pass one to rotate keys.
  *
  * 1. Logs in as the labeler account (main password; app passwords cannot
  *    change the DID document).
@@ -22,9 +25,9 @@ import { LABEL_DEFINITIONS } from "../src/labeler/policy.js";
 const LABELER_DID = "did:plc:h5wgui5fkurmgeno5mcpqfgv";
 const LABELER_ENDPOINT = "https://spooktober.katerstrophal.world";
 
-const didKey = process.argv[2];
-if (!didKey?.startsWith("did:key:z")) {
-  console.error("Usage: pnpm labeler-setup <did:key of the signing key>");
+const argKey = process.argv[2];
+if (argKey !== undefined && !argKey.startsWith("did:key:z")) {
+  console.error("Usage: pnpm labeler-setup [did:key of the signing key]");
   process.exit(1);
 }
 
@@ -56,6 +59,14 @@ async function plcData() {
 
 async function main() {
   const data = await plcData();
+
+  // Keep the published key unless a new one is given
+  const didKey = argKey ?? data.verificationMethods.atproto_label;
+  if (!didKey) {
+    throw new Error(
+      "No signing key in the DID document yet: pass the did:key of LABELER_SIGNING_KEY",
+    );
+  }
   const pds = data.services.atproto_pds.endpoint;
   console.log(`Labeler ${LABELER_DID} (PDS ${pds})\n`);
 

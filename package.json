@@ -18,7 +18,8 @@
     "format": "pnpm --filter frontend format && pnpm --filter backend format",
     "format:check": "pnpm --filter frontend format:check && pnpm --filter backend format:check",
     "test": "pnpm --filter backend test && pnpm --filter frontend test",
-    "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck"
+    "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck",
+    "labeler-setup": "pnpm --filter backend labeler-setup"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
