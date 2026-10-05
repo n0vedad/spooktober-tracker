@@ -129,8 +129,21 @@ describe("account removal", () => {
     await recordChange(nameChange(BOB, 2));
     await saveSnapshot(snapshot);
 
+    await pool.query(
+      "INSERT INTO bubbles (user_did, follows_count) VALUES ($1, 1)",
+      [ALICE],
+    );
+    await pool.query("INSERT INTO bubble_members VALUES ($1, $2, 1, 1)", [
+      ALICE,
+      BOB,
+    ]);
+
     expect(await purgeAccount(ALICE)).toBe(1);
     expect(await getSnapshot(ALICE)).toBeNull();
+    const { rows } = await pool.query(
+      "SELECT (SELECT count(*) FROM bubbles)::int + (SELECT count(*) FROM bubble_members)::int AS n",
+    );
+    expect(rows[0].n).toBe(0);
     expect(await getChangeHistory(BOB)).toHaveLength(1);
   });
 });

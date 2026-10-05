@@ -13,6 +13,7 @@ import {
   createSession,
   deleteSession,
 } from "../auth/sessions.js";
+import { bubbleService } from "../bubble/index.js";
 import { ADMIN_DID, FRONTEND_URL, PUBLIC_URL } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
 import { resolveHandle } from "../utils/handle-resolver.js";
@@ -110,6 +111,12 @@ router.get("/oauth/callback", async (req, res) => {
 
   try {
     const token = await createSession(did);
+
+    // Map the user's bubble right away, so it is ready when they look at it
+    bubbleService.ensure(did).catch((error) => {
+      console.error(`❌ Could not start bubble for ${did}:`, error);
+    });
+
     res.cookie(SESSION_COOKIE, token, {
       ...cookieOptions,
       maxAge: SESSION_TTL_MS,

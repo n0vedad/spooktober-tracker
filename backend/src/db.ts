@@ -53,7 +53,7 @@ export interface PageOptions {
 }
 
 // SQL condition hiding changes of ignored and bot-flagged accounts (alias pc)
-const VISIBLE_CHANGE = `
+export const VISIBLE_CHANGE = `
   NOT EXISTS (SELECT 1 FROM ignored_users iu WHERE iu.did = pc.did)
   AND NOT EXISTS (SELECT 1 FROM noisy_accounts na WHERE na.did = pc.did)`;
 
@@ -154,6 +154,33 @@ export async function initDB() {
       );
       CREATE INDEX IF NOT EXISTS idx_profile_changes_did_changed_at
         ON profile_changes(did, changed_at);
+    `);
+
+    // Cached follow lists (shared by all users' bubbles)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS follow_lists (
+        did TEXT PRIMARY KEY,
+        follows TEXT[] NOT NULL,
+        fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // Computed second-degree network ("bubble") per user
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bubbles (
+        user_did TEXT PRIMARY KEY,
+        follows_count INT NOT NULL,
+        computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS bubble_members (
+        user_did TEXT NOT NULL,
+        did TEXT NOT NULL,
+        common_count INT NOT NULL,
+        score REAL NOT NULL,
+        PRIMARY KEY (user_did, did)
+      );
+      CREATE INDEX IF NOT EXISTS idx_bubble_members_common
+        ON bubble_members(user_did, common_count);
     `);
 
     // Login sessions of this app (cookie token is stored hashed)
@@ -532,7 +559,8 @@ export async function removeIgnoredUser(did: string): Promise<void> {
 }
 
 /**
- * Delete everything stored about one account (its changes and snapshot).
+ * Delete everything stored about one account: its changes, snapshot,
+ * computed bubble and cached follow list.
  *
  * @param did - Account DID.
  * @returns Promise resolving with the number of deleted change rows.
@@ -546,6 +574,10 @@ export async function purgeAccount(did: string): Promise<number> {
       [did],
     );
     await client.query("DELETE FROM profile_snapshots WHERE did = $1", [did]);
+    // The user's computed bubble and cached follow list
+    await client.query("DELETE FROM bubble_members WHERE user_did = $1", [did]);
+    await client.query("DELETE FROM bubbles WHERE user_did = $1", [did]);
+    await client.query("DELETE FROM follow_lists WHERE did = $1", [did]);
     await client.query("COMMIT");
     return deleted.rowCount ?? 0;
   } catch (error) {

@@ -19,8 +19,12 @@ export interface ProfileChange {
   new_display_name: string | null;
   old_avatar: string | null;
   new_avatar: string | null;
-  change_type: 'handle' | 'profile' | 'combined';
+  change_type: "handle" | "profile" | "combined";
   changed_at: string;
+  /** Closeness of the account to the viewing user (per-user views only) */
+  tier?: "follows" | "inner" | "bubble" | "edge";
+  /** How many of the viewer's follows follow this account (bubble members) */
+  common_follows?: number | null;
 }
 
 /**

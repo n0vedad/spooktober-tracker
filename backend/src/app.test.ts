@@ -8,6 +8,8 @@ import {
   createSession,
   getSessionDid,
 } from "./auth/sessions.js";
+import { bubbleService } from "./bubble/index.js";
+import { saveBubble } from "./bubble/store.js";
 import { flagNoisy, getChangeHistory, pool, recordChange } from "./db.js";
 
 const ALICE = "did:plc:alice";
@@ -40,6 +42,17 @@ vi.mock("./auth/oauth.js", () => ({
     })),
     callback: vi.fn(async () => ({ session: { did: ALICE }, state: null })),
     revoke: vi.fn(async () => {}),
+  },
+}));
+
+// Bubbles are computed from the public API; serve a finished one instead
+vi.mock("./bubble/index.js", () => ({
+  bubbleService: {
+    ensure: vi.fn(async () => ({
+      state: "ready",
+      followsCount: 1,
+      computedAt: "2026-10-05T12:00:00.000Z",
+    })),
   },
 }));
 
@@ -158,6 +171,8 @@ describe("OAuth flow", () => {
     const token = cookie.split(";")[0].split("=")[1];
     expect(await getSessionDid(token)).toBe(ALICE);
     expect(oauthClient.revoke).toHaveBeenCalledWith(ALICE);
+    // The bubble starts computing in the background right after login
+    expect(bubbleService.ensure).toHaveBeenCalledWith(ALICE);
   });
 
   it("sends failed logins back to the frontend with an error code", async () => {
@@ -227,6 +242,72 @@ describe("/api/me", () => {
     expect(res.body.data.changes.map((c: { did: string }) => c.did)).toEqual([
       ALICE,
     ]);
+  });
+
+  it("extends the view into the bubble with tier and common follows", async () => {
+    const CAROL = "did:plc:carol";
+    const DAVE = "did:plc:dave";
+    // Bob follows Alice (mocked); Carol is followed by 5 of his follows
+    await saveBubble(BOB, 1, [
+      { did: CAROL, commonCount: 5, score: 2 },
+      { did: DAVE, commonCount: 1, score: 0.5 },
+    ]);
+    for (const [did, seq] of [
+      [CAROL, 2],
+      [DAVE, 3],
+    ] as const) {
+      await recordChange({
+        did,
+        handle: null,
+        new_display_name: "🎃",
+        changed_at: new Date("2026-10-05T13:00:00Z"),
+        source_seq: seq,
+      });
+    }
+    const cookie = await loginAs(BOB);
+
+    const bubble = await request(app)
+      .get("/api/me/changes?scope=bubble&sort=closeness")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(
+      bubble.body.data.changes.map(
+        (c: { did: string; tier: string; common_follows: number | null }) => [
+          c.did,
+          c.tier,
+          c.common_follows,
+        ],
+      ),
+    ).toEqual([
+      [ALICE, "follows", null],
+      [CAROL, "inner", 5],
+    ]);
+    expect(bubble.body.data.bubble.state).toBe("ready");
+
+    const edge = await request(app)
+      .get("/api/me/changes?scope=edge")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(edge.body.data.changes).toHaveLength(3);
+  });
+
+  it("starts or refreshes the bubble computation", async () => {
+    const cookie = await loginAs(BOB);
+
+    const res = await request(app)
+      .get("/api/me/bubble?refresh=true")
+      .set("Cookie", cookie)
+      .expect(200);
+
+    expect(res.body.data.state).toBe("ready");
+    expect(bubbleService.ensure).toHaveBeenCalledWith(BOB, true);
+  });
+
+  it("rejects unknown scopes", async () => {
+    await request(app)
+      .get("/api/me/changes?scope=everyone")
+      .set("Cookie", await loginAs(BOB))
+      .expect(400);
   });
 
   it("deletes only the signed-in user's own data", async () => {
