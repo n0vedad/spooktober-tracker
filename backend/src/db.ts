@@ -156,6 +156,28 @@ export async function initDB() {
         ON profile_changes(did, changed_at);
     `);
 
+    // Login sessions of this app (cookie token is stored hashed)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_sessions (
+        token_hash TEXT PRIMARY KEY,
+        did TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_app_sessions_did ON app_sessions(did);
+    `);
+
+    // Key-value storage for the OAuth client (authorization states, sessions)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_store (
+        kind TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value JSONB NOT NULL,
+        expires_at TIMESTAMPTZ,
+        PRIMARY KEY (kind, key)
+      );
+    `);
+
     // Create ignored_users table
     await client.query(`
       CREATE TABLE IF NOT EXISTS ignored_users (

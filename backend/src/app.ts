@@ -9,10 +9,12 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getCorsConfig } from "./config.js";
+import { FRONTEND_URL, PUBLIC_URL, getCorsConfig } from "./config.js";
+import { loadSession, rejectCrossSite } from "./middleware/auth.js";
 import adminRouter from "./routes/admin.js";
+import authRouter from "./routes/auth.js";
 import changesRouter from "./routes/changes.js";
-import monitoringRouter from "./routes/monitoring.js";
+import meRouter from "./routes/me.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,21 +56,35 @@ export function createApp(): express.Express {
       ) {
         return callback(null, true);
       }
+      // No CORS headers: the browser won't expose responses to this origin,
+      // and rejectCrossSite answers its state-changing requests with 403
       console.warn(`❌ Blocked CORS origin: ${origin}`);
-      return callback(new Error("Not allowed by CORS"));
+      return callback(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-User-DID"],
+    allowedHeaders: ["Content-Type"],
   };
+
+  // Origins the frontend may send state-changing requests from
+  const frontendOrigins = [
+    new URL(PUBLIC_URL).origin,
+    new URL(FRONTEND_URL).origin,
+    ...corsConfig.origins,
+  ];
 
   // Middleware
   app.use(express.json());
   app.use(cors(corsOptions));
+  app.use(rejectCrossSite(frontendOrigins));
+  app.use(loadSession);
+
+  // OAuth login (/oauth/*, client metadata) and /api/me, /api/auth/logout
+  app.use(authRouter);
 
   // API Routes
+  app.use("/api/me", meRouter);
   app.use("/api/changes", changesRouter);
-  app.use("/api/monitoring", monitoringRouter);
   app.use("/api/admin", adminRouter);
 
   // Health check

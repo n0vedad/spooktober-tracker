@@ -17,12 +17,27 @@ importers:
 
   backend:
     dependencies:
+      '@atcute/identity-resolver':
+        specifier: ^2
+        version: 2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/identity-resolver-node':
+        specifier: ^2.0.1
+        version: 2.0.1(@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)
+      '@atcute/lexicons':
+        specifier: ^2
+        version: 2.1.1
+      '@atcute/oauth-node-client':
+        specifier: ^2
+        version: 2.0.1(@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)
       '@atproto/lex':
         specifier: ^0.3
         version: 0.3.14
       '@bsky/jetstream':
         specifier: ^1
         version: 1.0.0(@atproto/lex@0.3.14)
+      cookie:
+        specifier: ^1
+        version: 1.1.1
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -157,20 +172,73 @@ packages:
   '@atcute/client@4.0.3':
     resolution: {integrity: sha512-RIOZWFVLca/HiPAAUDqQPOdOreCxTbL5cb+WUf5yqQOKIu5yEAP3eksinmlLmgIrlr5qVOE7brazUUzaskFCfw==}
 
+  '@atcute/client@5.1.2':
+    resolution: {integrity: sha512-V3MOJudmmbuiFfrmLR3/ZGA+PKcI4E4ZNEDGKMX/YrvFrHyElD1/gb8NxLesrlIcHefiulqfX9dAl6hOkIt7CA==}
+    peerDependencies:
+      '@atcute/lexicons': ^2.0.0
+
+  '@atcute/identity-resolver-node@2.0.1':
+    resolution: {integrity: sha512-UtcmhY4Oxk9tk1elTHmilcIXA1EFtGQae7mp3l8Xqs6EZsZyH3cUDf/2jS1CoRT1GE/i3WfnLaxYmdMIVau1kg==}
+    peerDependencies:
+      '@atcute/identity': ^2.0.0
+      '@atcute/identity-resolver': ^2.0.0
+      '@atcute/lexicons': ^2.0.0
+
+  '@atcute/identity-resolver@2.0.2':
+    resolution: {integrity: sha512-NPavjKNRfunkMD99HjjKhEtyG76873V/N9IwwC1n+ePUW8wqTHSXstPLtGCelGBE1pA0T6RITzvbfDnMfOaCrw==}
+    peerDependencies:
+      '@atcute/identity': ^2.0.0
+      '@atcute/lexicons': ^2.0.0
+
   '@atcute/identity@1.1.0':
     resolution: {integrity: sha512-6vRvRqJatDB+JUQsb+UswYmtBGQnSZcqC3a2y6H5DB/v5KcIh+6nFFtc17G0+3W9rxdk7k9M4KkgkdKf/YDNoQ==}
+
+  '@atcute/identity@2.0.2':
+    resolution: {integrity: sha512-amr/EQceqVtBVmjBK4uUF7nKKYuRttadigpvOcAn4dnO6SNSwSjQi8KDH9LnukEotPsSP4UDsQvNfHWEoUcslw==}
+    peerDependencies:
+      '@atcute/lexicons': ^2.0.0
 
   '@atcute/lexicons@1.1.1':
     resolution: {integrity: sha512-k6qy5p3j9fJJ6ekaMPfEfp3ni4TW/XNuH9ZmsuwC0fi0tOjp+Fa8ZQakHwnqOzFt/cVBfGcmYE/lKNAbeTjgUg==}
 
+  '@atcute/lexicons@2.1.1':
+    resolution: {integrity: sha512-kHyqUW8g/Fq9LTctGh0TVBx0AmtecV6VSrRprrSbqKqHe9q8C6y+YPL3EMNq2l93XA1iDHkkvYwLdTcKL/lNbA==}
+
   '@atcute/multibase@1.1.5':
     resolution: {integrity: sha512-vbmEFxgpntMuRqVZOCBgf6bgq69UGrlznQCZirVSit/mlcgyFVkSGbSEfkRnpIcrM8SnaySwuKbVvL+EPLh2dw==}
+
+  '@atcute/multibase@1.2.5':
+    resolution: {integrity: sha512-cReTONgYpQo/VHD3ZmzPNoyBKJgSk1J4h//cvvdVVJBMar+SjlQ/sUXeTjQfuyfmDKv+TLKhmutLcvbMcQ9Rvw==}
 
   '@atcute/oauth-browser-client@1.0.26':
     resolution: {integrity: sha512-z8VUmwRO1sFu5Dq1qYQOQLenkTSNaOyzlUZhVwFR41ru+AP84MS5UHHW/NsdC1xJAq1v6mlLySJ+pjxdDW8IYA==}
 
+  '@atcute/oauth-crypto@1.0.1':
+    resolution: {integrity: sha512-ghC8ceFx0r6pi5X3dNoET1K6PNg8afeAOZLD4PKLhrpVYdRtRrgY4uqAe3ojtSIjoS6GXmVm063CoJ2xtg/MoQ==}
+
+  '@atcute/oauth-keyset@0.1.3':
+    resolution: {integrity: sha512-VSNUb2TLUTyntgzfn58kwNL4kp4TD+M868tyyrFWlCaDVy0pDnVFfUXa1z1W+DBWLL9ICy2qTdPitRokAZKivw==}
+
+  '@atcute/oauth-node-client@2.0.1':
+    resolution: {integrity: sha512-MgqN9Rnt5nuUH5zriETtbQrwcx/tWaELKaFVQtqggMtRI4k4IP5+ZbnG40tiJjbZfSclapA2kwOnT14kO0nAxg==}
+    peerDependencies:
+      '@atcute/identity-resolver': ^2.0.0
+      '@atcute/lexicons': ^2.0.0
+
+  '@atcute/oauth-types@1.0.1':
+    resolution: {integrity: sha512-9uFP/nK0PgPDsaNbLArzrCHvTZO1k04cSEX5jZ75W2Jh7Jxbh/CSTenSrad3CZXuX6y6hDquEtl6H/IqLtTmHw==}
+
   '@atcute/uint8array@1.0.4':
     resolution: {integrity: sha512-9jASMDghzhhDwjF3+eW+ZIauvytnUWDPfUVGUValRwnf9AZ7Yqqkc76tC89HVzVDAlJdhwQIUG2dQBsiVqumUA==}
+
+  '@atcute/uint8array@1.2.0':
+    resolution: {integrity: sha512-KoBGTbV4lS8zXNu91osM3FecrH3NUnxNPsBAkaNtn6uf/p240245qoLn7keFpRM0npX522X8R+XBBb2rvtE7Rg==}
+
+  '@atcute/util-fetch@2.0.2':
+    resolution: {integrity: sha512-I0oenHlJjwRpWPyAJojox5H0z9NthhdMFaEjtkxyjo85VPPxk1vMJk/1ZjMJsrs1SgHhB3spazEWzV5DW8w70A==}
+
+  '@atcute/util-text@1.3.4':
+    resolution: {integrity: sha512-u2UAM7iSM09sQaSG9jtxWFSPgB8boVj50/BoyMvYnhVgGBu+nXIuAcdDUQCsZA44YZgTPPhN/b86JX+jH7SPzQ==}
 
   '@atproto-labs/did-resolver@0.3.10':
     resolution: {integrity: sha512-SPWOcJG/rsqrp2XQZQe8ctC9Y604mivZfXTrCsXbo7dXeAukYSgljPPa/7yWAlTvCbqUSNKScVEWpdCyel/nFw==}
@@ -615,6 +683,9 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@oomfware/eval@0.1.0':
+    resolution: {integrity: sha512-EIkukTd3zDQEHUjcfFRDq79Jgm4OEyUrEUvp/SwgjfoH2POaE5cvaswIonFwdt8fSzJF5xtAdgcgIoKD8sPpjg==}
 
   '@paralleldrive/cuid2@2.3.1':
     resolution: {integrity: sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw==}
@@ -1078,6 +1149,10 @@ packages:
     resolution: {integrity: sha512-6DnInpx7SJ2AK3+CTUE/ZM0vWTUboZCegxhC2xiIydHR9jNuTAASBrfEpHhiGOZw/nX51bHt6YQl8jsGo4y/0w==}
     engines: {node: '>= 0.6'}
 
+  cookie@1.1.1:
+    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
+    engines: {node: '>=18'}
+
   cookiejar@2.1.4:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
 
@@ -1533,6 +1608,11 @@ packages:
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
+  nanoid@5.1.16:
+    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
+    engines: {node: ^18 || >=20}
     hasBin: true
 
   nanoid@5.1.6:
@@ -2035,6 +2115,9 @@ packages:
   unicode-segmenter@0.14.5:
     resolution: {integrity: sha512-jHGmj2LUuqDcX3hqY12Ql+uhUTn8huuxNZGq7GvtF6bSybzH3aFgedYu/KTzQStEgt1Ra2F3HxadNXsNjb3m3g==}
 
+  unicode-segmenter@0.17.3:
+    resolution: {integrity: sha512-hKZwqBjJDmqNrq1+LjDxck1qLzJFcLLJM2Xq92ORRHOuau6GSHeELmn+uyk6zNH1CK9mogrUJGP9WJCJUQXMAw==}
+
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
     engines: {node: '>= 0.8'}
@@ -2048,6 +2131,14 @@ packages:
   utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
+
+  valibot@1.5.0:
+    resolution: {integrity: sha512-nil6AkP2TChWL43Z5uJ6GTxX01CUA+g8LWUM+N/rB9NBbkUMaUsi9PUNzlUPgoKASgmx9f7eGOYpJ04/fSa6FQ==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   validate-html-nesting@1.2.3:
     resolution: {integrity: sha512-kdkWdCl6eCeLlRShJKbjVOU2kFKxMF8Ghu50n+crEoyx+VKm3FxAxF9z4DCy6+bbTOqNW0+jcIYRnjoIRzigRw==}
@@ -2267,18 +2358,59 @@ snapshots:
       '@atcute/identity': 1.1.0
       '@atcute/lexicons': 1.1.1
 
+  '@atcute/client@5.1.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
+    dependencies:
+      '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/lexicons': 2.1.1
+    transitivePeerDependencies:
+      - typescript
+
+  '@atcute/identity-resolver-node@2.0.1(@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)':
+    dependencies:
+      '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/identity-resolver': 2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/lexicons': 2.1.1
+
+  '@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
+    dependencies:
+      '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/lexicons': 2.1.1
+      '@atcute/util-fetch': 2.0.2(typescript@5.9.3)
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
   '@atcute/identity@1.1.0':
     dependencies:
       '@atcute/lexicons': 1.1.1
       '@badrap/valita': 0.4.6
 
+  '@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
+    dependencies:
+      '@atcute/lexicons': 2.1.1
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
   '@atcute/lexicons@1.1.1':
     dependencies:
+      esm-env: 1.2.2
+
+  '@atcute/lexicons@2.1.1':
+    dependencies:
+      '@atcute/uint8array': 1.2.0
+      '@atcute/util-text': 1.3.4
+      '@oomfware/eval': 0.1.0
+      '@standard-schema/spec': 1.1.0
       esm-env: 1.2.2
 
   '@atcute/multibase@1.1.5':
     dependencies:
       '@atcute/uint8array': 1.0.4
+
+  '@atcute/multibase@1.2.5':
+    dependencies:
+      '@atcute/uint8array': 1.2.0
 
   '@atcute/oauth-browser-client@1.0.26':
     dependencies:
@@ -2289,7 +2421,58 @@ snapshots:
       '@atcute/uint8array': 1.0.4
       nanoid: 5.1.6
 
+  '@atcute/oauth-crypto@1.0.1(typescript@5.9.3)':
+    dependencies:
+      '@atcute/multibase': 1.2.5
+      '@atcute/uint8array': 1.2.0
+      nanoid: 5.1.16
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@atcute/oauth-keyset@0.1.3(typescript@5.9.3)':
+    dependencies:
+      '@atcute/oauth-crypto': 1.0.1(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@atcute/oauth-node-client@2.0.1(@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
+    dependencies:
+      '@atcute/client': 5.1.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/identity-resolver': 2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3))(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/lexicons': 2.1.1
+      '@atcute/oauth-crypto': 1.0.1(typescript@5.9.3)
+      '@atcute/oauth-keyset': 0.1.3(typescript@5.9.3)
+      '@atcute/oauth-types': 1.0.1(typescript@5.9.3)
+      '@atcute/util-fetch': 2.0.2(typescript@5.9.3)
+      nanoid: 5.1.16
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@atcute/oauth-types@1.0.1(typescript@5.9.3)':
+    dependencies:
+      '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
+      '@atcute/lexicons': 2.1.1
+      '@atcute/oauth-keyset': 0.1.3(typescript@5.9.3)
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
   '@atcute/uint8array@1.0.4': {}
+
+  '@atcute/uint8array@1.2.0': {}
+
+  '@atcute/util-fetch@2.0.2(typescript@5.9.3)':
+    dependencies:
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@atcute/util-text@1.3.4':
+    dependencies:
+      unicode-segmenter: 0.17.3
 
   '@atproto-labs/did-resolver@0.3.10':
     dependencies:
@@ -2754,6 +2937,8 @@ snapshots:
 
   '@noble/hashes@1.8.0': {}
 
+  '@oomfware/eval@0.1.0': {}
+
   '@paralleldrive/cuid2@2.3.1':
     dependencies:
       '@noble/hashes': 1.8.0
@@ -3174,6 +3359,8 @@ snapshots:
   cookie-signature@1.2.2: {}
 
   cookie@0.7.1: {}
+
+  cookie@1.1.1: {}
 
   cookiejar@2.1.4: {}
 
@@ -3604,6 +3791,8 @@ snapshots:
   multiformats@13.4.2: {}
 
   nanoid@3.3.11: {}
+
+  nanoid@5.1.16: {}
 
   nanoid@5.1.6: {}
 
@@ -4079,6 +4268,8 @@ snapshots:
 
   unicode-segmenter@0.14.5: {}
 
+  unicode-segmenter@0.17.3: {}
+
   unpipe@1.0.0: {}
 
   update-browserslist-db@1.1.3(browserslist@4.26.3):
@@ -4088,6 +4279,10 @@ snapshots:
       picocolors: 1.1.1
 
   utils-merge@1.0.1: {}
+
+  valibot@1.5.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   validate-html-nesting@1.2.3: {}
 

@@ -10,11 +10,17 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.test.json"
+    "typecheck": "tsc -p tsconfig.test.json",
+    "gen-key": "node scripts/gen-oauth-key.mjs"
   },
   "dependencies": {
+    "@atcute/identity-resolver": "^2",
+    "@atcute/identity-resolver-node": "^2.0.1",
+    "@atcute/lexicons": "^2",
+    "@atcute/oauth-node-client": "^2",
     "@atproto/lex": "^0.3",
     "@bsky/jetstream": "^1",
+    "cookie": "^1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",

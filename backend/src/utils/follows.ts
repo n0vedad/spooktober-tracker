@@ -115,32 +115,35 @@ export async function fetchFollowsFromBluesky(
 const FOLLOWS_TTL_MS = 10 * 60 * 1000;
 // Upper bound on cached users (oldest entry is evicted first)
 const MAX_CACHED_USERS = 1000;
-const followsCache = new Map<string, { fetchedAt: number; dids: string[] }>();
+const followsCache = new Map<
+  string,
+  { fetchedAt: number; follows: Follow[] }
+>();
 
 /**
- * Get the DIDs a user follows, cached for a few minutes.
+ * Get the accounts a user follows (DID + handle), cached for a few minutes.
  *
  * @param userDID The DID of the user whose follows to load.
  * @param fetchFn Follow fetcher (injectable for tests).
- * @returns Array of followed DIDs.
+ * @returns Array of follows.
  */
-export async function getFollowDIDs(
+export async function getFollows(
   userDID: string,
   fetchFn: (did: string) => Promise<Follow[]> = fetchFollowsFromBluesky,
-): Promise<string[]> {
+): Promise<Follow[]> {
   const cached = followsCache.get(userDID);
   if (cached && Date.now() - cached.fetchedAt < FOLLOWS_TTL_MS) {
-    return cached.dids;
+    return cached.follows;
   }
 
-  const dids = (await fetchFn(userDID)).map((f) => f.did);
+  const follows = await fetchFn(userDID);
   followsCache.delete(userDID);
   if (followsCache.size >= MAX_CACHED_USERS) {
     const oldest = followsCache.keys().next().value;
     if (oldest !== undefined) followsCache.delete(oldest);
   }
-  followsCache.set(userDID, { fetchedAt: Date.now(), dids });
-  return dids;
+  followsCache.set(userDID, { fetchedAt: Date.now(), follows });
+  return follows;
 }
 
 /**

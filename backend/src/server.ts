@@ -6,12 +6,15 @@ import "dotenv/config";
 import { createServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import { createApp } from "./app.js";
-import { PORT } from "./config.js";
+import { getSessionDid, purgeExpiredSessions } from "./auth/sessions.js";
+import { ADMIN_DID, PORT } from "./config.js";
 import { initDB, pool } from "./db.js";
 import { ingester } from "./ingest/index.js";
+import { readSessionToken } from "./middleware/auth.js";
 
 const IPV6_ANY = "::";
-const DID_REGEX = /^did:(plc|web):[a-z0-9.-]+$/;
+// How often expired sessions and OAuth states are deleted
+const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 // How often live status is pushed to connected admin clients
 const STATUS_BROADCAST_INTERVAL_MS = 2000;
 // Last event older than this counts as "catching up" rather than live
@@ -43,8 +46,8 @@ const start = async () => {
     const httpServer = createServer(createApp());
     const wss = new WebSocketServer({ noServer: true });
 
-    // Handle WebSocket upgrade on /ws (requires a syntactically valid DID)
-    httpServer.on("upgrade", (request, socket, head) => {
+    // Handle WebSocket upgrade on /ws (admin session required)
+    httpServer.on("upgrade", async (request, socket, head) => {
       try {
         const url = new URL(
           request.url || "",
@@ -56,11 +59,9 @@ const start = async () => {
           return;
         }
 
-        const did = url.searchParams.get("did");
-        if (!did || !DID_REGEX.test(did)) {
-          console.warn(
-            `❌ WebSocket connection rejected: Invalid or missing DID (${did})`,
-          );
+        const token = readSessionToken(request.headers.cookie);
+        const did = token ? await getSessionDid(token) : null;
+        if (did !== ADMIN_DID) {
           socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
           socket.destroy();
           return;
@@ -100,6 +101,14 @@ const start = async () => {
       });
     }, STATUS_BROADCAST_INTERVAL_MS);
     broadcastTimer.unref();
+
+    // Periodically delete expired sessions and OAuth states
+    const cleanupTimer = setInterval(() => {
+      purgeExpiredSessions().catch((error) =>
+        console.error("❌ Session cleanup failed:", error),
+      );
+    }, SESSION_CLEANUP_INTERVAL_MS);
+    cleanupTimer.unref();
 
     // Start HTTP Server first and wait for it to be ready
     await new Promise<void>((resolve, reject) => {

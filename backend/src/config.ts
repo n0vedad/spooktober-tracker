@@ -131,3 +131,29 @@ export const getCorsConfig = (): { allowAll: boolean; origins: string[] } => {
 // Jetstream v2 instance to consume (live tail needs no API key).
 export const JETSTREAM_URL =
   optionalEnv("JETSTREAM_URL") ?? "https://jetstream.us-east.bsky.network";
+
+// Public origin of this backend (OAuth client_id/redirect_uri are derived from it).
+// Defaults to the loopback address, which makes the OAuth client a public
+// "localhost" client that needs no key or hosted metadata (development only).
+export const PUBLIC_URL = (
+  optionalEnv("PUBLIC_URL") ?? `http://127.0.0.1:${PORT}`
+).replace(/\/+$/, "");
+
+// Where to send the browser after login/logout (the Vite dev server in development).
+export const FRONTEND_URL = (optionalEnv("FRONTEND_URL") ?? PUBLIC_URL).replace(
+  /\/+$/,
+  "",
+);
+
+// Loopback origins get a public OAuth client; everything else must be confidential.
+export const IS_LOOPBACK = /^http:\/\/(127\.0\.0\.1|\[::1\])(:\d+)?$/.test(
+  PUBLIC_URL,
+);
+
+// Private ES256 JWK for the confidential OAuth client (generate with `pnpm gen-key`).
+export const OAUTH_PRIVATE_KEY_JWK = optionalEnv("OAUTH_PRIVATE_KEY_JWK");
+if (!IS_LOOPBACK && !OAUTH_PRIVATE_KEY_JWK) {
+  throw new Error(
+    "OAUTH_PRIVATE_KEY_JWK must be set when PUBLIC_URL is not a loopback address.",
+  );
+}
