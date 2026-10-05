@@ -64,6 +64,10 @@ const isLocalhost = AS_LOCALHOST.test(connectionString);
 export const pool = new Pool({
   connectionString,
   ssl: isLocalhost ? false : { rejectUnauthorized: false },
+  // Optional cap on pool size (tests use 1 because PGlite is single-connection)
+  max: process.env.DATABASE_POOL_MAX
+    ? Number(process.env.DATABASE_POOL_MAX)
+    : undefined,
 });
 
 // Prevent the Node process from crashing when Postgres drops idle connections.
