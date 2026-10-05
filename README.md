@@ -8,7 +8,7 @@ Tracks Bluesky profile changes (handle, display name, avatar) across the whole n
 - HttpOnly session cookie, cross-site request protection
 - Network-wide ingestion of profile records and identity events (Jetstream v2)
 - Last known profile state per account stored in Postgres, so changes survive restarts
-- Per-user view: changes among the accounts you follow
+- Per-user view by closeness: your follows, plus your "bubble" (accounts followed by your follows) in tiers - inner circle (≥10% of your follows, at least 5), bubble (≥3), edge (≥1)
 - Ignored users: skipped during ingestion; their changes are deleted
 - Admin panel (stats, start/stop with cursor, ignore list)
 
@@ -112,6 +112,7 @@ Frontend (`frontend/.env`, development only, all optional)
 - The first event seen for an account only stores a baseline; Jetstream never delivers previous values
 - Profiles younger than one hour are treated as sign-up setup, not renames
 - Bots are filtered: accounts that self-label as `bot` or record more than 10 changes within 24h are flagged; their changes are hidden and no longer recorded (admin can unflag via `/api/admin/noisy-accounts`)
+- Bubbles are computed in the background right after login: the follow list of every account you follow is fetched from the public AppView (cached for 24h and shared between users) and scored by common follows and Adamic-Adar
 - v2 identity events carry no handle, so the current handle is read from the DID document; for unknown accounts the previous handle comes from the PLC audit log
 
 ## API
@@ -124,7 +125,8 @@ Auth
 
 User routes
 - `GET /api/me/follows`: Accounts you follow
-- `GET /api/me/changes`: Changes among the accounts you follow
+- `GET /api/me/changes?scope=follows|inner|bubble|edge&sort=recent|closeness`: Changes among your follows, extended into your bubble up to the given tier (each change has `tier` and `common_follows`)
+- `GET /api/me/bubble?refresh=false`: Bubble state (`ready`, `computing` with progress, `failed`); starts computing when missing or older than 24h
 - `DELETE /api/me/data`: Delete your own changes and stored profile state
 - `GET /api/changes?limit=50&before=<id>`: Newest profile changes (paginated)
 - `GET /api/changes/:did/history`: Change history for a DID
