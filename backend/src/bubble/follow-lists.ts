@@ -2,6 +2,7 @@
  * Fetch complete follow lists from the public Bluesky AppView.
  */
 
+import type { ProfileViewLike } from "../ingest/seed.js";
 import { fetchWithTimeout } from "../utils/fetch-with-timeout.js";
 
 const GET_FOLLOWS_URL =
@@ -17,6 +18,8 @@ const DEFAULT_RETRY_MS = 10_000;
 export interface FetchFollowListDeps {
   fetchFn?: typeof fetchWithTimeout;
   sleep?: (ms: number) => Promise<void>;
+  // Receives the profile views of each page (used to seed snapshots)
+  onPage?: (follows: ProfileViewLike[]) => Promise<void> | void;
 }
 
 const defaultSleep = (ms: number) =>
@@ -83,10 +86,11 @@ export async function fetchFollowList(
     }
 
     const data = (await response.json()) as {
-      follows: Array<{ did: string }>;
+      follows: ProfileViewLike[];
       cursor?: string;
     };
     for (const follow of data.follows) follows.push(follow.did);
+    await deps.onPage?.(data.follows);
 
     if (!data.cursor || data.follows.length === 0) return follows;
     cursor = data.cursor;

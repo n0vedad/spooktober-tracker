@@ -458,6 +458,38 @@ export async function saveSnapshot(snapshot: ProfileSnapshot): Promise<void> {
 }
 
 /**
+ * Store baseline snapshots for accounts that have none yet. Existing
+ * snapshots (from Jetstream or earlier seeding) are never overwritten.
+ *
+ * @param snapshots Baseline snapshots.
+ * @returns Number of newly stored snapshots.
+ */
+export async function seedSnapshots(
+  snapshots: readonly ProfileSnapshot[],
+): Promise<number> {
+  let inserted = 0;
+  for (let i = 0; i < snapshots.length; i += 5000) {
+    const chunk = snapshots.slice(i, i + 5000);
+    const result = await pool.query(
+      `INSERT INTO profile_snapshots
+         (did, handle, display_name, avatar_cid, profile_seen, updated_at)
+       SELECT did, handle, display_name, avatar_cid, TRUE, NOW()
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[])
+         AS s(did, handle, display_name, avatar_cid)
+       ON CONFLICT (did) DO NOTHING`,
+      [
+        chunk.map((s) => s.did),
+        chunk.map((s) => s.handle),
+        chunk.map((s) => s.display_name),
+        chunk.map((s) => s.avatar_cid),
+      ],
+    );
+    inserted += result.rowCount ?? 0;
+  }
+  return inserted;
+}
+
+/**
  * Count stored profile snapshots (accounts seen so far).
  *
  * @returns Promise resolving with the number of snapshots.

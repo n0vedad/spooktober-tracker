@@ -11,6 +11,7 @@ import {
 import { bubbleService } from "./bubble/index.js";
 import { saveBubble } from "./bubble/store.js";
 import { flagNoisy, getChangeHistory, pool, recordChange } from "./db.js";
+import { seedAccounts } from "./ingest/seed.js";
 import { optInSync } from "./labeler/index.js";
 import { saveOptIn } from "./labeler/store.js";
 
@@ -63,6 +64,9 @@ vi.mock("./labeler/index.js", () => ({
   labeler: { did: "did:plc:labeler" },
   optInSync: { syncIfStale: vi.fn(async () => {}) },
 }));
+
+// Seeding talks to the public AppView
+vi.mock("./ingest/seed.js", () => ({ seedAccounts: vi.fn(async () => {}) }));
 
 // Keep the real Jetstream client out of route tests
 vi.mock("./ingest/index.js", () => ({
@@ -181,6 +185,8 @@ describe("OAuth flow", () => {
     expect(oauthClient.revoke).toHaveBeenCalledWith(ALICE);
     // The bubble starts computing in the background right after login
     expect(bubbleService.ensure).toHaveBeenCalledWith(ALICE);
+    // and the user's own profile becomes a known baseline
+    expect(seedAccounts).toHaveBeenCalledWith([ALICE]);
   });
 
   it("sends failed logins back to the frontend with an error code", async () => {

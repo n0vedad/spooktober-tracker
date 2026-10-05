@@ -5,6 +5,7 @@
 import { bubbleService } from "../bubble/index.js";
 import { LABELER_DID, LABELER_SIGNING_KEY } from "../config.js";
 import { getChangesSince } from "../db.js";
+import { seedAccounts } from "../ingest/seed.js";
 import { importSigningKey } from "./labels.js";
 import { createOptInSync, fetchFollowers, fetchLikers } from "./optins.js";
 import { createLabeler } from "./service.js";
@@ -40,8 +41,10 @@ export const optInSync = labeler
       getOptIns,
       saveOptIn,
       removeOptIn,
-      // Map the bubble right away, so it is ready if they log in
+      // Know their profile (so the first change counts) and map the bubble
+      // right away, so it is ready if they log in
       onNewOptIn: (did) => {
+        void seedAccounts([did]);
         bubbleService.ensure(did).catch((error) => {
           console.error(`❌ Could not start bubble for ${did}:`, error);
         });
