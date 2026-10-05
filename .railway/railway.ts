@@ -20,11 +20,11 @@ const REGION = "europe-west4-drams3a";
 const PUBLIC_URL = "https://spooktober.katerstrophal.world";
 
 export default defineRailway(() => {
-  // Pinned to the image the existing data directory was created with:
-  // the generic postgres() helper would switch to Postgres 18, which cannot
-  // open a Postgres 17 data directory without an upgrade
+  // Pinned to the major version of the data directory. Major upgrades must go
+  // through Railway's pg_upgrade flow (Database -> Config -> Major Version
+  // Upgrade); changing this tag alone would not migrate the data
   const Postgres = database("Postgres", "postgres", {
-    image: "ghcr.io/railwayapp-templates/postgres-ssl:17",
+    image: "ghcr.io/railwayapp-templates/postgres-ssl:18",
     defaultMountPath: "/var/lib/postgresql/data",
     region: REGION,
   });

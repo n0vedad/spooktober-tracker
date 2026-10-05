@@ -74,7 +74,7 @@ pnpm start
 
 ## Deployment (Railway)
 
-The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code): Postgres (pinned to the Postgres 17 image of the existing volume) and the app service, which deploys `main` from GitHub with `pnpm build` / `pnpm start`.
+The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code): Postgres (pinned to the Postgres 18 image; major upgrades go through Railway's pg_upgrade flow, not by changing the tag) and the app service, which deploys `main` from GitHub with `pnpm build` / `pnpm start`.
 
 ```
 railway config plan     # preview
