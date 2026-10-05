@@ -28,6 +28,7 @@ const tracker = () =>
     isNoisy,
     flagNoisy,
     countRecentChanges,
+    resolveHandle: async () => null,
     lookupPreviousHandle: async () => null,
   });
 

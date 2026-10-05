@@ -28,8 +28,12 @@ const OLD_PROFILE = new Date("2024-01-01T00:00:00Z");
 beforeEach(resetDB);
 afterAll(() => pool.end());
 
-function makeTracker(previousHandle: string | null = null) {
+function makeTracker(
+  previousHandle: string | null = null,
+  currentHandle: string | null = null,
+) {
   const lookupPreviousHandle = vi.fn(async () => previousHandle);
+  const resolveHandle = vi.fn(async () => currentHandle);
   const tracker = createProfileTracker({
     getSnapshot,
     saveSnapshot,
@@ -38,9 +42,10 @@ function makeTracker(previousHandle: string | null = null) {
     isNoisy,
     flagNoisy,
     countRecentChanges,
+    resolveHandle,
     lookupPreviousHandle,
   });
-  return { ...tracker, lookupPreviousHandle };
+  return { ...tracker, lookupPreviousHandle, resolveHandle };
 }
 
 const profile = (
@@ -85,6 +90,29 @@ describe("trackProfile", () => {
       change_type: "profile",
     });
     expect(new Date(change.changed_at)).toEqual(T0);
+  });
+
+  it("looks up the handle once when a change is recorded for an unknown handle", async () => {
+    const { trackProfile, resolveHandle } = makeTracker(null, "alice.test");
+    await trackProfile(profile(1, "Alice"));
+
+    await trackProfile(profile(2, "Ghost"));
+    await trackProfile(profile(3, "Ghoul"));
+
+    const history = await getChangeHistory(DID);
+    expect(history.map((c) => c.handle)).toEqual(["alice.test", "alice.test"]);
+    expect((await getSnapshot(DID))?.handle).toBe("alice.test");
+    // Baselines need no handle; afterwards it comes from the snapshot
+    expect(resolveHandle).toHaveBeenCalledTimes(1);
+  });
+
+  it("still records the change when the handle lookup fails", async () => {
+    const { trackProfile, resolveHandle } = makeTracker();
+    resolveHandle.mockRejectedValue(new Error("plc.directory down"));
+    await trackProfile(profile(1, "Alice"));
+
+    expect(await trackProfile(profile(2, "Ghost"))).toBe("changed");
+    expect((await getChangeHistory(DID))[0].handle).toBeNull();
   });
 
   it("records avatar changes and removals", async () => {

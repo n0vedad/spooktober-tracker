@@ -39,6 +39,11 @@ export interface TrackerDeps {
   flagNoisy(did: string, reason: string): Promise<void>;
   countRecentChanges(did: string, since: Date): Promise<number>;
   /**
+   * Current handle from the DID document, used when a profile changes before
+   * any identity event revealed the handle. May throw; failures yield null.
+   */
+  resolveHandle(did: string): Promise<string | null>;
+  /**
    * Resolve the handle an account had right before switching to `newHandle`,
    * used when no snapshot exists yet. Returns null when unknown.
    */
@@ -101,6 +106,17 @@ export function createProfileTracker(deps: TrackerDeps) {
   }
 
   /**
+   * Resolve the current handle, treating lookup failures as unknown.
+   */
+  async function resolveHandleSafely(did: string): Promise<string | null> {
+    try {
+      return await deps.resolveHandle(did);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Process a new profile state (create, update or delete of the record).
    */
   async function trackProfile(state: ProfileState): Promise<TrackResult> {
@@ -149,10 +165,13 @@ export function createProfileTracker(deps: TrackerDeps) {
       return "suppressed";
     }
 
+    // Changes are listed by handle, so look it up once if still unknown
+    next.handle = snapshot.handle ?? (await resolveHandleSafely(state.did));
+
     // Record before updating the snapshot, so a crash in between is replayed
     await deps.recordChange({
       did: state.did,
-      handle: snapshot.handle,
+      handle: next.handle,
       ...(nameChanged && {
         old_display_name: snapshot.display_name,
         new_display_name: state.displayName,

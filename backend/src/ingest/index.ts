@@ -62,6 +62,7 @@ export const ingester = new Ingester({
     isNoisy,
     flagNoisy,
     countRecentChanges,
+    resolveHandle: fetchCurrentHandle,
     lookupPreviousHandle: findPreviousHandle,
   }),
   resolveHandle: (did) => fetchCurrentHandle(did),

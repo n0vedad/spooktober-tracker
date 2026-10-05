@@ -371,10 +371,9 @@ export const SpooktoberTracker = (props: Props) => {
                       >
                         <div class="flex min-w-0 items-center justify-between gap-2">
                           <span class="break-all font-bold">
-                            @
-                            {follow?.handle ||
-                              change.handle ||
-                              change.did.slice(0, 20) + "..."}
+                            {follow?.handle || change.handle
+                              ? `@${follow?.handle || change.handle}`
+                              : change.did}
                           </span>
                           <span class="text-sm text-gray-500">
                             {isExpanded() ? "▼" : "▶"}
@@ -625,10 +624,9 @@ export const SpooktoberTracker = (props: Props) => {
                       >
                         <div class="mb-2 flex min-w-0 items-center justify-between gap-2">
                           <span class="break-all font-bold">
-                            @
-                            {follow?.handle ||
-                              change.handle ||
-                              change.did.slice(0, 20) + "..."}
+                            {follow?.handle || change.handle
+                              ? `@${follow?.handle || change.handle}`
+                              : change.did}
                           </span>
                           <span class="text-sm text-gray-500">
                             {isExpanded() ? "▼" : "▶"}
