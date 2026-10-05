@@ -58,6 +58,9 @@ export default defineRailway(() => {
       ADMIN_DID: "did:plc:ciul6zkjqvao5uv4cpyoijdp",
       // Confidential OAuth client key (`pnpm --filter backend gen-key`)
       OAUTH_PRIVATE_KEY_JWK: process.env.OAUTH_PRIVATE_KEY_JWK ?? preserve(),
+      // Labeler account and its signing key (`pnpm --filter backend labeler-key`)
+      LABELER_DID: "did:plc:h5wgui5fkurmgeno5mcpqfgv",
+      LABELER_SIGNING_KEY: process.env.LABELER_SIGNING_KEY ?? preserve(),
     },
   });
 

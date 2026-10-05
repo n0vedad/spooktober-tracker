@@ -72,6 +72,21 @@ pnpm start
 ```
 `pnpm start` runs `node dist/backend/src/server.js`.
 
+## Labeler
+
+The backend also runs a Bluesky labeler as `@spooktober-labeler.katerstrophal.world` (`did:plc:h5wgui5fkurmgeno5mcpqfgv`), served from the app's own origin:
+
+- `GET /xrpc/com.atproto.label.queryLabels` and the WebSocket stream `/xrpc/com.atproto.label.subscribeLabels`
+- Labels: `spooky-name`, `spooky-avatar`, `spooky-handle` on the account, only during October, expiring on November 1
+- Opt-in required: only accounts that **like or follow** the labeler are labeled (polled every 2 minutes). Withdrawing retracts their labels; opting in also labels earlier changes of the season and precomputes the account's bubble.
+- Enabled when `LABELER_DID` and `LABELER_SIGNING_KEY` are set
+
+One-time setup by the account owner (publishes the label definitions and adds the signing key and endpoint to the DID document; needs the account's main password and an emailed code):
+
+```
+pnpm --filter backend labeler-setup <did:key of LABELER_SIGNING_KEY>
+```
+
 ## Deployment (Railway)
 
 The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code): Postgres (pinned to the Postgres 18 image; major upgrades go through Railway's pg_upgrade flow, not by changing the tag) and the app service, which deploys `main` from GitHub with `pnpm build` / `pnpm start`.
@@ -79,6 +94,7 @@ The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code)
 ```
 railway config plan     # preview
 OAUTH_PRIVATE_KEY_JWK="$(pnpm --silent --filter backend gen-key)" railway config apply   # first apply
+LABELER_SIGNING_KEY=<privateKeyHex from pnpm --filter backend labeler-key> railway config apply   # add the labeler key
 railway config apply    # later applies keep the stored key
 ```
 
