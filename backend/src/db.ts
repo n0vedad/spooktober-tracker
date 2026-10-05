@@ -184,6 +184,31 @@ export async function initDB() {
         ON bubble_members(user_did, common_count);
     `);
 
+    // Labels emitted by the labeler, in emission order (seq = stream cursor)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS labels (
+        seq BIGSERIAL PRIMARY KEY,
+        src TEXT NOT NULL,
+        uri TEXT NOT NULL,
+        cid TEXT,
+        val TEXT NOT NULL,
+        neg BOOLEAN NOT NULL DEFAULT FALSE,
+        cts TEXT NOT NULL,
+        exp TEXT,
+        sig BYTEA NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_labels_subject ON labels(uri, val, seq DESC);
+    `);
+
+    // Accounts that opted in to being labeled (by liking or following the labeler)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS labeler_optins (
+        did TEXT PRIMARY KEY,
+        via TEXT NOT NULL,
+        opted_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
     // Login sessions of this app (cookie token is stored hashed)
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_sessions (
@@ -363,6 +388,27 @@ export async function getChangeHistory(
      AND ${VISIBLE_CHANGE}
      ORDER BY pc.id DESC`,
     [did],
+  );
+  return result.rows;
+}
+
+/**
+ * Visible changes of an account since a point in time, oldest first.
+ *
+ * @param did Account DID.
+ * @param since Lower bound (inclusive) for changed_at.
+ * @returns Change rows.
+ */
+export async function getChangesSince(
+  did: string,
+  since: Date,
+): Promise<ProfileChangeRow[]> {
+  const result = await pool.query<ProfileChangeRow>(
+    `SELECT pc.* FROM profile_changes pc
+     WHERE pc.did = $1 AND pc.changed_at >= $2
+     AND ${VISIBLE_CHANGE}
+     ORDER BY pc.id`,
+    [did, since],
   );
   return result.rows;
 }

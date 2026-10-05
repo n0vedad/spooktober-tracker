@@ -10,6 +10,13 @@ import { getSessionDid, purgeExpiredSessions } from "./auth/sessions.js";
 import { ADMIN_DID, PORT } from "./config.js";
 import { initDB, pool } from "./db.js";
 import { ingester } from "./ingest/index.js";
+import {
+  labeler,
+  OPT_IN_SYNC_INTERVAL_MS,
+  optInSync,
+} from "./labeler/index.js";
+import { getLabelsAfter, getLatestSeq } from "./labeler/store.js";
+import { serveLabelSubscription } from "./labeler/subscription.js";
 import { readSessionToken } from "./middleware/auth.js";
 
 const IPV6_ANY = "::";
@@ -45,6 +52,9 @@ const start = async () => {
 
     const httpServer = createServer(createApp());
     const wss = new WebSocketServer({ noServer: true });
+    // Public label stream of the labeler
+    const labelWss = new WebSocketServer({ noServer: true });
+    const LABEL_STREAM_PATH = "/xrpc/com.atproto.label.subscribeLabels";
 
     // Handle WebSocket upgrade on /ws (admin session required)
     httpServer.on("upgrade", async (request, socket, head) => {
@@ -53,6 +63,24 @@ const start = async () => {
           request.url || "",
           `http://${request.headers.host}`,
         );
+        if (url.pathname === LABEL_STREAM_PATH && labeler) {
+          const raw = url.searchParams.get("cursor");
+          const cursor =
+            raw !== null && /^\d+$/.test(raw) ? Number(raw) : undefined;
+          const { events } = labeler;
+          labelWss.handleUpgrade(request, socket, head, (ws) => {
+            serveLabelSubscription(ws, cursor, {
+              events,
+              getLabelsAfter,
+              getLatestSeq,
+            }).catch((error) => {
+              console.error("❌ Label subscription failed:", error);
+              ws.close();
+            });
+          });
+          return;
+        }
+
         if (url.pathname !== "/ws") {
           socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
           socket.destroy();
@@ -129,6 +157,12 @@ const start = async () => {
     // Start network-wide ingestion (resumes from the stored cursor)
     await ingester.start();
     console.log("✅ Jetstream ingestion started");
+
+    // Track who opted in to the labeler (likes/follows)
+    if (labeler && optInSync) {
+      optInSync.start(OPT_IN_SYNC_INTERVAL_MS);
+      console.log(`✅ Labeler running as ${labeler.did}`);
+    }
   } catch (error) {
     console.error("❌ Failed to start server:", error);
     process.exit(1);

@@ -157,3 +157,8 @@ if (!IS_LOOPBACK && !OAUTH_PRIVATE_KEY_JWK) {
     "OAUTH_PRIVATE_KEY_JWK must be set when PUBLIC_URL is not a loopback address.",
   );
 }
+
+// Labeler identity and signing key (secp256k1, 64 hex chars). The labeler
+// is disabled unless both are set (`pnpm labeler-key` generates a key).
+export const LABELER_DID = optionalEnv("LABELER_DID");
+export const LABELER_SIGNING_KEY = optionalEnv("LABELER_SIGNING_KEY");

@@ -20,6 +20,7 @@ import {
   fetchCurrentHandle,
   findPreviousHandle,
 } from "../utils/handle-resolver.js";
+import { labeler } from "../labeler/index.js";
 import { Ingester, PROFILE_COLLECTION, type EventSource } from "./ingester.js";
 import { createProfileTracker } from "./profile-tracker.js";
 
@@ -57,7 +58,16 @@ export const ingester = new Ingester({
   tracker: createProfileTracker({
     getSnapshot,
     saveSnapshot,
-    recordChange,
+    recordChange: async (change) => {
+      const row = await recordChange(change);
+      // Label the change for opted-in accounts; never block ingestion on it
+      if (row && labeler) {
+        await labeler.onChange(row).catch((error) => {
+          console.error(`❌ Labeling failed for ${row.did}:`, error);
+        });
+      }
+      return row;
+    },
     isIgnored,
     isNoisy,
     flagNoisy,

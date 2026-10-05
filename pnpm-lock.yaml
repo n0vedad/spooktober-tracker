@@ -20,6 +20,12 @@ importers:
 
   backend:
     dependencies:
+      '@atcute/cbor':
+        specifier: ^2
+        version: 2.3.8(@atcute/cid@2.5.0)
+      '@atcute/crypto':
+        specifier: ^2
+        version: 2.4.4
       '@atcute/identity-resolver':
         specifier: ^2.0.2
         version: 2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@7.0.2))(@atcute/lexicons@2.1.1)(typescript@7.0.2)
@@ -171,10 +177,21 @@ packages:
     resolution: {integrity: sha512-YnVzxDxLaqL0t7Q4wfcgHZjg55Wm6y5EaO7Bhu3q9J7wq/8iw3PhsnWiOQhYekx4VexnbkgWpTT6n+QIV7kczw==}
     engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
+  '@atcute/cbor@2.3.8':
+    resolution: {integrity: sha512-gazXBcNTr2U3cRaCjfRbq2GKHJnWapUUA3mgehL+0tbVXEty2wf/LIwF9z46gjqjX2DYGGwkybF8lTI3dzHaNQ==}
+    peerDependencies:
+      '@atcute/cid': ^2.5.0
+
+  '@atcute/cid@2.5.0':
+    resolution: {integrity: sha512-CAZyzUdaQhuC+S7tGjoC7vgyDI2X4JU+CPO/7WjEU7HlNsAGXjSkD++5TlfnSWGDqUeqpjMZjUfFBZYHKzPHew==}
+
   '@atcute/client@5.1.2':
     resolution: {integrity: sha512-V3MOJudmmbuiFfrmLR3/ZGA+PKcI4E4ZNEDGKMX/YrvFrHyElD1/gb8NxLesrlIcHefiulqfX9dAl6hOkIt7CA==}
     peerDependencies:
       '@atcute/lexicons': ^2.0.0
+
+  '@atcute/crypto@2.4.4':
+    resolution: {integrity: sha512-Yc7lXz4ndDjbs+/WrKeGS+sVEr+sx8xi5zSVInKNl0FAEY6KbvcT+bjaU9A3erUVviFp9yEcu/1aSg/f+GPpBg==}
 
   '@atcute/identity-resolver-node@2.0.1':
     resolution: {integrity: sha512-UtcmhY4Oxk9tk1elTHmilcIXA1EFtGQae7mp3l8Xqs6EZsZyH3cUDf/2jS1CoRT1GE/i3WfnLaxYmdMIVau1kg==}
@@ -708,6 +725,9 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@noble/secp256k1@3.2.0':
+    resolution: {integrity: sha512-Z3ZAWOTxJ0EuTuZTi7Y69iK7GgrLHh8sgm45lVDhg/b3Nk1TpAiKhick2KkZisHuupeepSkyIydN/J459SdX1w==}
 
   '@oomfware/eval@0.1.0':
     resolution: {integrity: sha512-EIkukTd3zDQEHUjcfFRDq79Jgm4OEyUrEUvp/SwgjfoH2POaE5cvaswIonFwdt8fSzJF5xtAdgcgIoKD8sPpjg==}
@@ -2579,12 +2599,29 @@ snapshots:
       is-potential-custom-element-name: 1.0.1
       lru-cache: 11.5.3
 
+  '@atcute/cbor@2.3.8(@atcute/cid@2.5.0)':
+    dependencies:
+      '@atcute/cid': 2.5.0
+      '@atcute/multibase': 1.2.5
+      '@atcute/uint8array': 1.2.0
+
+  '@atcute/cid@2.5.0':
+    dependencies:
+      '@atcute/multibase': 1.2.5
+      '@atcute/uint8array': 1.2.0
+
   '@atcute/client@5.1.2(@atcute/lexicons@2.1.1)(typescript@7.0.2)':
     dependencies:
       '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@7.0.2)
       '@atcute/lexicons': 2.1.1
     transitivePeerDependencies:
       - typescript
+
+  '@atcute/crypto@2.4.4':
+    dependencies:
+      '@atcute/multibase': 1.2.5
+      '@atcute/uint8array': 1.2.0
+      '@noble/secp256k1': 3.2.0
 
   '@atcute/identity-resolver-node@2.0.1(@atcute/identity-resolver@2.0.2(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@7.0.2))(@atcute/lexicons@2.1.1)(typescript@7.0.2))(@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@7.0.2))(@atcute/lexicons@2.1.1)':
     dependencies:
@@ -3154,6 +3191,8 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@noble/secp256k1@3.2.0': {}
 
   '@oomfware/eval@0.1.0': {}
 
