@@ -60,7 +60,8 @@ router.get(
   validate(didParamSchema, "params"),
   async (req, res) => {
     try {
-      const { did } = req.params;
+      // Validated by didParamSchema above
+      const { did } = req.params as { did: string };
       const changes = await getChangeHistory(did);
 
       // Return the assembled change history data for the client.

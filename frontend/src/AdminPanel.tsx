@@ -768,7 +768,7 @@ export const AdminPanel = () => {
                     Current value:
                   </span>
                   <br />
-                  <span class="break-all font-mono text-gray-500 dark:text-gray-400">
+                  <span class="font-mono break-all text-gray-500 dark:text-gray-400">
                     {startCursor()}
                   </span>
                   <br />
@@ -785,7 +785,7 @@ export const AdminPanel = () => {
                     24h ago:
                   </span>
                   <br />
-                  <span class="break-all font-mono text-gray-500 dark:text-gray-400">
+                  <span class="font-mono break-all text-gray-500 dark:text-gray-400">
                     {(() => {
                       const twentyFourHoursAgo =
                         Date.now() - 24 * 60 * 60 * 1000;

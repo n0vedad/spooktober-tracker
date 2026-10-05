@@ -103,7 +103,7 @@ export const HandleTypeahead = (props: Props) => {
           active() >= 0 ? `handle-suggestion-${active()}` : undefined
         }
         value={props.value}
-        class="dark:bg-dark-100 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="dark:bg-dark-100 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:ring-2 focus:ring-blue-500 focus:outline-none"
         onInput={(e) => {
           props.onInput(e.currentTarget.value);
           scheduleSearch(e.currentTarget.value);

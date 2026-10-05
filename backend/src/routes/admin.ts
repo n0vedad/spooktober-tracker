@@ -246,7 +246,8 @@ router.delete(
   validate(didParamSchema, "params"),
   async (req, res) => {
     try {
-      const { did } = req.params;
+      // Validated by didParamSchema above
+      const { did } = req.params as { did: string };
 
       // Remove from ignore list
       await removeIgnoredUser(did);
@@ -319,7 +320,8 @@ router.delete(
   validate(didParamSchema, "params"),
   async (req, res) => {
     try {
-      const { did } = req.params;
+      // Validated by didParamSchema above
+      const { did } = req.params as { did: string };
       await unflagNoisy(did);
       console.log(`✅ Admin removed bot flag from ${did}`);
 

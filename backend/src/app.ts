@@ -97,7 +97,7 @@ export function createApp(): express.Express {
   app.use(express.static(frontendPath));
 
   // SPA fallback - serve index.html for all non-API routes (production only)
-  app.get("*", (_, res) => {
+  app.get("/{*splat}", (_, res) => {
     const indexPath = path.join(frontendPath, "index.html");
 
     // In dev mode, frontend runs on Vite, so don't serve from here

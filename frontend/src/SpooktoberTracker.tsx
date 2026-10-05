@@ -532,7 +532,7 @@ export const SpooktoberTracker = (props: Props) => {
                         onclick={() => toggleHistory(change.did)}
                       >
                         <div class="mb-2 flex min-w-0 items-center justify-between gap-2">
-                          <span class="break-all font-bold">
+                          <span class="font-bold break-all">
                             {tierEmoji(change.tier)}{" "}
                             {follow?.handle || change.handle
                               ? `@${follow?.handle || change.handle}`

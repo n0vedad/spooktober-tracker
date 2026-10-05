@@ -5,7 +5,7 @@
  * OAuth login, never by anything the client claims about itself.
  */
 
-import { parse as parseCookies } from "cookie";
+import { parseCookie } from "cookie";
 import express from "express";
 import type { APIResponse } from "../../../shared/types.js";
 import { SESSION_COOKIE, getSessionDid } from "../auth/sessions.js";
@@ -33,7 +33,7 @@ export function readSessionToken(
   header: string | undefined,
 ): string | undefined {
   if (!header) return undefined;
-  return parseCookies(header)[SESSION_COOKIE] || undefined;
+  return parseCookie(header)[SESSION_COOKIE] || undefined;
 }
 
 /**

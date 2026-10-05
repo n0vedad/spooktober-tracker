@@ -18,8 +18,18 @@ export const validate =
     try {
       // Parse and validate the target part of the request
       const validated = schema.parse(req[target]);
-      // Replace the original with validated data (with type coercion applied)
-      req[target] = validated;
+      // Replace the original with validated data (with type coercion applied).
+      // Express 5 exposes req.query as a getter, so it is redefined instead.
+      if (target === "query") {
+        Object.defineProperty(req, "query", {
+          value: validated,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      } else {
+        req[target] = validated;
+      }
       next();
     } catch (error) {
       // Format Zod validation errors into a readable response
