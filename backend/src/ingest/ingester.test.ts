@@ -1,9 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDB } from "../../test/db-helpers.js";
 import {
+  countRecentChanges,
+  flagNoisy,
   getChangeHistory,
   getSnapshot,
   isIgnored,
+  isNoisy,
   pool,
   recordChange,
   saveSnapshot,
@@ -22,6 +25,9 @@ const tracker = () =>
     saveSnapshot,
     recordChange,
     isIgnored,
+    isNoisy,
+    flagNoisy,
+    countRecentChanges,
     lookupPreviousHandle: async () => null,
   });
 

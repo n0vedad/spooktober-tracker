@@ -19,6 +19,14 @@ const INVALID_HANDLE = "handle.invalid";
 // (the app first writes the handle as display name, then the real values)
 export const ONBOARDING_WINDOW_MS = 60 * 60 * 1000;
 
+// Accounts with more recorded changes than this within the window are
+// treated as bots (clocks, "now playing", ...) and suppressed from then on
+export const MAX_CHANGES_PER_WINDOW = 10;
+export const NOISE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Self-label Bluesky accounts can set on their own profile to mark a bot
+const BOT_SELF_LABEL = "bot";
+
 /**
  * Storage and lookup operations the tracker depends on.
  */
@@ -27,6 +35,9 @@ export interface TrackerDeps {
   saveSnapshot(snapshot: ProfileSnapshot): Promise<void>;
   recordChange(change: NewProfileChange): Promise<ProfileChangeRow | null>;
   isIgnored(did: string): Promise<boolean>;
+  isNoisy(did: string): Promise<boolean>;
+  flagNoisy(did: string, reason: string): Promise<void>;
+  countRecentChanges(did: string, since: Date): Promise<number>;
   /**
    * Resolve the handle an account had right before switching to `newHandle`,
    * used when no snapshot exists yet. Returns null when unknown.
@@ -47,6 +58,8 @@ export interface ProfileState {
   avatarCid: string | null;
   // `createdAt` of the profile record (kept across updates); null if unknown
   recordCreatedAt: Date | null;
+  // Self-labels set on the profile record (e.g. "bot")
+  selfLabels: string[];
 }
 
 // New handle announced by an identity event.
@@ -58,7 +71,13 @@ export interface HandleState {
 }
 
 // What the tracker did with an event (useful for logging and tests).
-export type TrackResult = "ignored" | "baseline" | "unchanged" | "changed";
+export type TrackResult =
+  | "ignored"
+  | "baseline"
+  | "unchanged"
+  | "changed"
+  // A change happened, but the account is (now) flagged as a bot
+  | "suppressed";
 
 /**
  * Create tracker functions bound to the given dependencies.
@@ -67,6 +86,20 @@ export type TrackResult = "ignored" | "baseline" | "unchanged" | "changed";
  * @returns Handlers for profile and handle updates.
  */
 export function createProfileTracker(deps: TrackerDeps) {
+  /**
+   * Decide whether a change of this account may be recorded, flagging the
+   * account as noisy once it exceeds the change rate limit.
+   */
+  async function mayRecord(did: string, time: Date): Promise<boolean> {
+    if (await deps.isNoisy(did)) return false;
+    const since = new Date(time.getTime() - NOISE_WINDOW_MS);
+    if ((await deps.countRecentChanges(did, since)) >= MAX_CHANGES_PER_WINDOW) {
+      await deps.flagNoisy(did, "frequent-changes");
+      return false;
+    }
+    return true;
+  }
+
   /**
    * Process a new profile state (create, update or delete of the record).
    */
@@ -81,6 +114,13 @@ export function createProfileTracker(deps: TrackerDeps) {
       avatar_cid: state.avatarCid,
       profile_seen: true,
     };
+
+    // Self-declared bots are never tracked
+    if (state.selfLabels.includes(BOT_SELF_LABEL)) {
+      await deps.flagNoisy(state.did, "bot-self-label");
+      await deps.saveSnapshot(next);
+      return "suppressed";
+    }
 
     // First sighting of this profile: nothing to compare against
     if (!snapshot?.profile_seen) {
@@ -103,6 +143,11 @@ export function createProfileTracker(deps: TrackerDeps) {
 
     // Other profile fields (bio, banner, ...) changed; nothing we track
     if (!nameChanged && !avatarChanged) return "unchanged";
+
+    if (!(await mayRecord(state.did, state.time))) {
+      await deps.saveSnapshot(next);
+      return "suppressed";
+    }
 
     // Record before updating the snapshot, so a crash in between is replayed
     await deps.recordChange({
@@ -152,6 +197,11 @@ export function createProfileTracker(deps: TrackerDeps) {
       return "baseline";
     }
 
+    if (!(await mayRecord(state.did, state.time))) {
+      await deps.saveSnapshot(next);
+      return "suppressed";
+    }
+
     await deps.recordChange({
       did: state.did,
       handle: state.handle,
@@ -177,14 +227,21 @@ export function readProfileRecord(record: unknown): {
   displayName: string | null;
   avatarCid: string | null;
   recordCreatedAt: Date | null;
+  selfLabels: string[];
 } {
   if (!record || typeof record !== "object") {
-    return { displayName: null, avatarCid: null, recordCreatedAt: null };
+    return {
+      displayName: null,
+      avatarCid: null,
+      recordCreatedAt: null,
+      selfLabels: [],
+    };
   }
   const r = record as {
     displayName?: unknown;
     avatar?: { ref?: { $link?: unknown }; cid?: unknown };
     createdAt?: unknown;
+    labels?: { values?: Array<{ val?: unknown }> };
   };
 
   const displayName =
@@ -201,5 +258,11 @@ export function readProfileRecord(record: unknown): {
   const recordCreatedAt =
     created && !Number.isNaN(created.getTime()) ? created : null;
 
-  return { displayName, avatarCid, recordCreatedAt };
+  const selfLabels = Array.isArray(r.labels?.values)
+    ? r.labels.values
+        .map((label) => label?.val)
+        .filter((val): val is string => typeof val === "string")
+    : [];
+
+  return { displayName, avatarCid, recordCreatedAt, selfLabels };
 }

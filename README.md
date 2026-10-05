@@ -115,6 +115,7 @@ Notes
 - Ingestion resumes from the stored cursor (Jetstream keeps ~36h of live history); without one it starts live
 - The first event seen for an account only stores a baseline; Jetstream never delivers previous values
 - Profiles younger than one hour are treated as sign-up setup, not renames
+- Bots are filtered: accounts that self-label as `bot` or record more than 10 changes within 24h are flagged; their changes are hidden and no longer recorded (admin can unflag via `/api/admin/noisy-accounts`)
 - v2 identity events carry no handle, so the current handle is read from the DID document; for unknown accounts the previous handle comes from the PLC audit log
 
 ## API
@@ -139,6 +140,8 @@ Admin routes
 - `GET /api/admin/ignored-users`: List ignored users
 - `POST /api/admin/ignored-users`: Add ignored user
 - `DELETE /api/admin/ignored-users/:did`: Remove ignored user
+- `GET /api/admin/noisy-accounts`: Accounts flagged as bots
+- `DELETE /api/admin/noisy-accounts/:did`: Remove bot flag
 
 ## Troubleshooting
 

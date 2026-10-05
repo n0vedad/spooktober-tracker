@@ -6,8 +6,11 @@
 import { Jetstream, websocketTransport } from "@bsky/jetstream";
 import { JETSTREAM_URL } from "../config.js";
 import {
+  countRecentChanges,
+  flagNoisy,
   getSnapshot,
   isIgnored,
+  isNoisy,
   loadSetting,
   recordChange,
   saveSetting,
@@ -56,6 +59,9 @@ export const ingester = new Ingester({
     saveSnapshot,
     recordChange,
     isIgnored,
+    isNoisy,
+    flagNoisy,
+    countRecentChanges,
     lookupPreviousHandle: findPreviousHandle,
   }),
   resolveHandle: (did) => fetchCurrentHandle(did),

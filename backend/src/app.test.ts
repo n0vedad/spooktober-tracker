@@ -2,7 +2,7 @@ import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDB } from "../test/db-helpers.js";
 import { createApp } from "./app.js";
-import { pool, recordChange } from "./db.js";
+import { flagNoisy, pool, recordChange } from "./db.js";
 
 const ALICE = "did:plc:alice";
 const BOB = "did:plc:bob";
@@ -12,6 +12,13 @@ const ADMIN = process.env.ADMIN_DID!;
 vi.mock("./utils/follows.js", () => ({
   getFollowDIDs: vi.fn(async () => [ALICE]),
   invalidateFollows: vi.fn(),
+}));
+
+// No PLC directory lookups from tests
+vi.mock("./utils/handle-resolver.js", () => ({
+  resolveHandles: vi.fn(async (dids: string[]) =>
+    dids.map((did) => ({ did, handle: null })),
+  ),
 }));
 
 // Keep the real Jetstream client out of route tests
@@ -128,6 +135,34 @@ describe("/api/admin", () => {
       isInBackfill: false,
       ingestion: { lastSeq: 42, changesDetected: 1 },
     });
+  });
+
+  it("lists and unflags bot-flagged accounts", async () => {
+    await flagNoisy(ALICE, "frequent-changes");
+    const list = await request(app)
+      .get("/api/admin/noisy-accounts")
+      .set("X-User-DID", ADMIN)
+      .expect(200);
+    expect(list.body.data).toMatchObject([
+      { did: ALICE, reason: "frequent-changes" },
+    ]);
+
+    // Hidden while flagged, visible again after unflagging
+    const hidden = await request(app)
+      .get("/api/changes")
+      .set("X-User-DID", BOB)
+      .expect(200);
+    expect(hidden.body.data.changes).toEqual([]);
+
+    await request(app)
+      .delete(`/api/admin/noisy-accounts/${ALICE}`)
+      .set("X-User-DID", ADMIN)
+      .expect(200);
+    const visible = await request(app)
+      .get("/api/changes")
+      .set("X-User-DID", BOB)
+      .expect(200);
+    expect(visible.body.data.changes).toHaveLength(1);
   });
 
   it("refuses to start ingestion twice", async () => {

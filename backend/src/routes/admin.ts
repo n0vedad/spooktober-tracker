@@ -8,7 +8,9 @@ import {
   addIgnoredUser,
   countSnapshots,
   getIgnoredUsers,
+  getNoisyAccounts,
   removeIgnoredUser,
+  unflagNoisy,
 } from "../db.js";
 import { ingester } from "../ingest/index.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -266,6 +268,71 @@ router.delete(
       const response: APIResponse<never> = {
         success: false,
         error: "Failed to remove ignored user",
+      };
+      res.status(500).json(response);
+    }
+  },
+);
+
+/**
+ * GET /api/admin/noisy-accounts
+ * Accounts auto-flagged as bots
+ */
+router.get("/noisy-accounts", requireAdmin, async (_req, res) => {
+  try {
+    const accounts = await getNoisyAccounts();
+    const resolved = await resolveHandles(accounts.map((a) => a.did));
+    const handleMap = new Map(resolved.map((r) => [r.did, r.handle]));
+
+    const response: APIResponse<
+      Array<{
+        did: string;
+        reason: string;
+        flagged_at: string;
+        handle: string | null;
+      }>
+    > = {
+      success: true,
+      data: accounts.map((a) => ({
+        ...a,
+        handle: handleMap.get(a.did) ?? null,
+      })),
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching noisy accounts:", error);
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Failed to fetch noisy accounts",
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * DELETE /api/admin/noisy-accounts/:did
+ * Remove the bot flag (e.g. a false positive); its changes become visible again
+ */
+router.delete(
+  "/noisy-accounts/:did",
+  requireAdmin,
+  validate(didParamSchema, "params"),
+  async (req, res) => {
+    try {
+      const { did } = req.params;
+      await unflagNoisy(did);
+      console.log(`✅ Admin removed bot flag from ${did}`);
+
+      const response: APIResponse<{ message: string }> = {
+        success: true,
+        data: { message: `Bot flag removed from ${did}` },
+      };
+      res.json(response);
+    } catch (error) {
+      console.error("Error removing bot flag:", error);
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Failed to remove bot flag",
       };
       res.status(500).json(response);
     }

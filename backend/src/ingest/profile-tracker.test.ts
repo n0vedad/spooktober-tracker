@@ -2,15 +2,20 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDB } from "../../test/db-helpers.js";
 import {
   addIgnoredUser,
+  countRecentChanges,
+  flagNoisy,
   getChangeHistory,
+  getChanges,
   getSnapshot,
   isIgnored,
+  isNoisy,
   pool,
   recordChange,
   saveSnapshot,
 } from "../db.js";
 import {
   createProfileTracker,
+  MAX_CHANGES_PER_WINDOW,
   ONBOARDING_WINDOW_MS,
   readProfileRecord,
 } from "./profile-tracker.js";
@@ -30,6 +35,9 @@ function makeTracker(previousHandle: string | null = null) {
     saveSnapshot,
     recordChange,
     isIgnored,
+    isNoisy,
+    flagNoisy,
+    countRecentChanges,
     lookupPreviousHandle,
   });
   return { ...tracker, lookupPreviousHandle };
@@ -46,6 +54,7 @@ const profile = (
   displayName,
   avatarCid,
   recordCreatedAt: OLD_PROFILE,
+  selfLabels: [] as string[],
 });
 
 describe("trackProfile", () => {
@@ -168,6 +177,52 @@ describe("trackProfile", () => {
     ).toBe("changed");
   });
 
+  it("never tracks accounts that self-label as bot", async () => {
+    const { trackProfile } = makeTracker();
+    await trackProfile(profile(1, "Clock 12:00"));
+
+    expect(
+      await trackProfile({ ...profile(2, "Clock 12:01"), selfLabels: ["bot"] }),
+    ).toBe("suppressed");
+    expect(await isNoisy(DID)).toBe(true);
+    expect(await getChangeHistory(DID)).toEqual([]);
+  });
+
+  it("flags accounts that change too often and hides their changes", async () => {
+    const { trackProfile } = makeTracker();
+    await trackProfile(profile(1, "Clock 0"));
+
+    const results = [];
+    for (let i = 1; i <= MAX_CHANGES_PER_WINDOW + 2; i++) {
+      results.push(await trackProfile(profile(1 + i, `Clock ${i}`)));
+    }
+
+    expect(results.filter((r) => r === "changed")).toHaveLength(
+      MAX_CHANGES_PER_WINDOW,
+    );
+    expect(results.slice(-2)).toEqual(["suppressed", "suppressed"]);
+    expect(await isNoisy(DID)).toBe(true);
+    // Already recorded changes disappear from every listing
+    expect(await getChangeHistory(DID)).toEqual([]);
+    expect(await getChanges({ limit: 50 })).toEqual([]);
+    // The snapshot keeps following the bot, so nothing is stale after unflagging
+    expect((await getSnapshot(DID))?.display_name).toBe(
+      `Clock ${MAX_CHANGES_PER_WINDOW + 2}`,
+    );
+  });
+
+  it("does not count changes older than the window", async () => {
+    const { trackProfile } = makeTracker();
+    await trackProfile(profile(1, "Name 0"));
+    const dayAgo = new Date(T0.getTime() - 25 * 60 * 60 * 1000);
+    for (let i = 1; i <= MAX_CHANGES_PER_WINDOW; i++) {
+      await trackProfile({ ...profile(1 + i, `Name ${i}`), time: dayAgo });
+    }
+
+    expect(await trackProfile(profile(100, "Ghost"))).toBe("changed");
+    expect(await isNoisy(DID)).toBe(false);
+  });
+
   it("skips ignored accounts entirely", async () => {
     const { trackProfile } = makeTracker();
     await addIgnoredUser(DID);
@@ -254,6 +309,7 @@ describe("readProfileRecord", () => {
       displayName: "にーろ",
       avatarCid: "bafkreiav",
       recordCreatedAt: null,
+      selfLabels: [],
     });
   });
 
@@ -268,7 +324,20 @@ describe("readProfileRecord", () => {
       displayName: null,
       avatarCid: "bafylegacy",
       recordCreatedAt: new Date("2025-12-24T17:17:40.089Z"),
+      selfLabels: [],
     });
+  });
+
+  it("reads self-labels", () => {
+    expect(
+      readProfileRecord({
+        displayName: "Clock",
+        labels: {
+          $type: "com.atproto.label.defs#selfLabels",
+          values: [{ val: "bot" }],
+        },
+      }).selfLabels,
+    ).toEqual(["bot"]);
   });
 
   it("returns nulls for deleted records", () => {
@@ -276,6 +345,7 @@ describe("readProfileRecord", () => {
       displayName: null,
       avatarCid: null,
       recordCreatedAt: null,
+      selfLabels: [],
     });
   });
 });

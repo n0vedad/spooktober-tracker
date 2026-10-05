@@ -52,6 +52,11 @@ export interface PageOptions {
   beforeId?: number;
 }
 
+// SQL condition hiding changes of ignored and bot-flagged accounts (alias pc)
+const VISIBLE_CHANGE = `
+  NOT EXISTS (SELECT 1 FROM ignored_users iu WHERE iu.did = pc.did)
+  AND NOT EXISTS (SELECT 1 FROM noisy_accounts na WHERE na.did = pc.did)`;
+
 // Connection Pool
 const { Pool } = pg;
 const connectionString = DATABASE_URL;
@@ -140,6 +145,17 @@ export async function initDB() {
       );
     `);
 
+    // Accounts auto-flagged as bots; their changes are hidden and no longer recorded
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS noisy_accounts (
+        did TEXT PRIMARY KEY,
+        reason TEXT NOT NULL,
+        flagged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_profile_changes_did_changed_at
+        ON profile_changes(did, changed_at);
+    `);
+
     // Create ignored_users table
     await client.query(`
       CREATE TABLE IF NOT EXISTS ignored_users (
@@ -180,9 +196,7 @@ export async function getChanges(
   const result = await pool.query<ProfileChangeRow>(
     `SELECT pc.* FROM profile_changes pc
      WHERE ($2::int IS NULL OR pc.id < $2)
-     AND NOT EXISTS (
-       SELECT 1 FROM ignored_users iu WHERE iu.did = pc.did
-     )
+     AND ${VISIBLE_CHANGE}
      ORDER BY pc.id DESC
      LIMIT $1`,
     [page.limit, page.beforeId ?? null],
@@ -206,9 +220,7 @@ export async function getChangesByDIDs(
     `SELECT pc.* FROM profile_changes pc
      WHERE pc.did = ANY($1)
      AND ($3::int IS NULL OR pc.id < $3)
-     AND NOT EXISTS (
-       SELECT 1 FROM ignored_users iu WHERE iu.did = pc.did
-     )
+     AND ${VISIBLE_CHANGE}
      ORDER BY pc.id DESC
      LIMIT $2`,
     [dids, page.limit, page.beforeId ?? null],
@@ -282,9 +294,7 @@ export async function getChangeHistory(
   const result = await pool.query<ProfileChangeRow>(
     `SELECT pc.* FROM profile_changes pc
      WHERE pc.did = $1
-     AND NOT EXISTS (
-       SELECT 1 FROM ignored_users iu WHERE iu.did = pc.did
-     )
+     AND ${VISIBLE_CHANGE}
      ORDER BY pc.id DESC`,
     [did],
   );
@@ -345,6 +355,80 @@ export async function countSnapshots(): Promise<number> {
     "SELECT COUNT(*) AS count FROM profile_snapshots",
   );
   return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Count recorded changes of an account since a point in time.
+ *
+ * @param did - Account DID.
+ * @param since - Lower bound (inclusive) for changed_at.
+ * @returns Promise resolving with the number of changes.
+ */
+export async function countRecentChanges(
+  did: string,
+  since: Date,
+): Promise<number> {
+  const result = await pool.query<{ count: string }>(
+    "SELECT COUNT(*) AS count FROM profile_changes WHERE did = $1 AND changed_at >= $2",
+    [did, since],
+  );
+  return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Check whether an account is flagged as a bot.
+ *
+ * @param did - Account DID.
+ * @returns Promise resolving with true when flagged.
+ */
+export async function isNoisy(did: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM noisy_accounts WHERE did = $1 LIMIT 1",
+    [did],
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Flag an account as a bot (keeps the first reason if already flagged).
+ *
+ * @param did - Account DID.
+ * @param reason - Why it was flagged (e.g. "frequent-changes").
+ * @returns Promise that resolves once stored.
+ */
+export async function flagNoisy(did: string, reason: string): Promise<void> {
+  const result = await pool.query(
+    `INSERT INTO noisy_accounts (did, reason) VALUES ($1, $2)
+     ON CONFLICT (did) DO NOTHING`,
+    [did, reason],
+  );
+  if (result.rowCount) {
+    console.log(`🤖 Flagged ${did} as noisy (${reason})`);
+  }
+}
+
+/**
+ * List accounts flagged as bots, newest first.
+ *
+ * @returns Promise resolving with the flagged accounts.
+ */
+export async function getNoisyAccounts(): Promise<
+  Array<{ did: string; reason: string; flagged_at: string }>
+> {
+  const result = await pool.query(
+    "SELECT did, reason, flagged_at FROM noisy_accounts ORDER BY flagged_at DESC",
+  );
+  return result.rows;
+}
+
+/**
+ * Remove the bot flag from an account, making its changes visible again.
+ *
+ * @param did - Account DID.
+ * @returns Promise that resolves once removed.
+ */
+export async function unflagNoisy(did: string): Promise<void> {
+  await pool.query("DELETE FROM noisy_accounts WHERE did = $1", [did]);
 }
 
 /**
