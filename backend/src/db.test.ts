@@ -6,6 +6,7 @@ import {
   getChanges,
   getChangesByDIDs,
   getSnapshot,
+  initDB,
   pool,
   purgeAccount,
   recordChange,
@@ -102,6 +103,34 @@ describe("change listings", () => {
   it("returns nothing for an empty DID list", async () => {
     await recordChange(nameChange(ALICE, 1));
     expect(await getChangesByDIDs([], { limit: 10 })).toEqual([]);
+  });
+});
+
+describe("initDB", () => {
+  it("removes the data of the 2025 per-user monitoring", async () => {
+    await pool.query(`
+      CREATE TABLE monitored_follows (user_did TEXT, follow_did TEXT);
+      CREATE TABLE monitoring_backfill_state (user_did TEXT);
+      INSERT INTO system_settings (key, value)
+        VALUES ('jetstream_stop_cursor', '1'), ('jetstream_v2_cursor', '2');
+      INSERT INTO profile_changes (did, new_display_name, changed_at)
+        VALUES ('${ALICE}', 'Old 2025 entry', '2025-10-10');
+    `);
+    await recordChange(nameChange(ALICE, 1));
+
+    await initDB();
+
+    const { rows: tables } = await pool.query(
+      "SELECT tablename FROM pg_tables WHERE tablename LIKE 'monitor%'",
+    );
+    expect(tables).toEqual([]);
+    expect(
+      (await getChangeHistory(ALICE)).map((c) => c.new_display_name),
+    ).toEqual(["Ghost"]);
+    const { rows: settings } = await pool.query(
+      "SELECT key FROM system_settings ORDER BY key",
+    );
+    expect(settings.map((r) => r.key)).toEqual(["jetstream_v2_cursor"]);
   });
 });
 

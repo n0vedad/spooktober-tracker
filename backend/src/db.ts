@@ -223,6 +223,22 @@ export async function initDB() {
       );
     `);
 
+    // Migration: remove data of the 2025 per-user monitoring (kept in backups).
+    // Changes without a Jetstream sequence number predate the v2 ingestion;
+    // the old tables and v1 cursor settings are no longer read.
+    const legacy = await client.query(
+      "DELETE FROM profile_changes WHERE source_seq IS NULL",
+    );
+    await client.query(`
+      DROP TABLE IF EXISTS monitored_follows;
+      DROP TABLE IF EXISTS monitoring_backfill_state;
+      DELETE FROM system_settings
+        WHERE key IN ('jetstream_stop_cursor', 'jetstream_stop_time');
+    `);
+    if (legacy.rowCount) {
+      console.log(`🧹 Removed ${legacy.rowCount} legacy profile change(s)`);
+    }
+
     console.log("✅ Database schema initialized");
 
     // Error handling
