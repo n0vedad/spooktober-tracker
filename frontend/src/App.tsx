@@ -8,6 +8,7 @@ import { createEffect, createSignal, onMount, Show } from "solid-js";
 import { Toaster } from "solid-toast";
 import { AdminPanel } from "./AdminPanel";
 import { getMe, getMyFollows, logout, startLogin, type Me } from "./api";
+import { HandleTypeahead } from "./HandleTypeahead";
 import { SpooktoberTracker } from "./SpooktoberTracker";
 
 // Pairing of a DID with its corresponding handle returned from follow lookups.
@@ -235,21 +236,15 @@ const App = () => {
                     <label for="handle" class="ml-0.5 text-sm">
                       Handle
                     </label>
-                    <input
-                      type="text"
-                      id="handle"
-                      placeholder="user.bsky.social"
-                      autocomplete="username"
-                      class="dark:bg-dark-100 mb-4 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      onInput={(e) =>
-                        login.setLoginInput(e.currentTarget.value)
-                      }
+                    <HandleTypeahead
+                      value={login.loginInput()}
+                      onInput={login.setLoginInput}
                     />
                     <button
                       type="submit"
                       class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
                     >
-                      Login with Bluesky
+                      Login
                     </button>
                   </form>
 

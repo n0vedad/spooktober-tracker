@@ -17,7 +17,7 @@
     "start": "pnpm --filter backend start",
     "format": "pnpm --filter frontend format && pnpm --filter backend format",
     "format:check": "pnpm --filter frontend format:check && pnpm --filter backend format:check",
-    "test": "pnpm --filter backend test",
+    "test": "pnpm --filter backend test && pnpm --filter frontend test",
     "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck"
   },
   "devDependencies": {
