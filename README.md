@@ -1,14 +1,15 @@
 # Spooktober Tracker
 
-Tracks Bluesky profile changes (handle, display name, avatar) via a SolidJS frontend and an Express/Postgres backend that consumes Bluesky Jetstream.
+Tracks Bluesky profile changes (handle, display name, avatar) across the whole network via a SolidJS frontend and an Express/Postgres backend that consumes Bluesky Jetstream v2.
 
 ## Features
 
 - OAuth and app‑password login
-- Continuous Jetstream monitoring (main stream)
-- Temporary 24h backfill streams per user (queued; capacity‑limited)
-- Ignored users: excluded in main and temporary streams before sending to Jetstream; DB insert also skips
-- Admin panel (stats, start/stop, recommended cursor, ignore list)
+- Network-wide ingestion of profile records and identity events (Jetstream v2)
+- Last known profile state per account stored in Postgres, so changes survive restarts
+- Per-user view: changes among the accounts you follow
+- Ignored users: skipped during ingestion; their changes are deleted
+- Admin panel (stats, start/stop with cursor, ignore list)
 
 ## Stack
 
@@ -72,6 +73,8 @@ pnpm start
 ## Workspace Scripts
 
 ```
+pnpm test        # backend tests (Vitest + in-memory PGlite, no Docker needed)
+pnpm typecheck
 pnpm dev
 pnpm build
 pnpm start
@@ -91,7 +94,7 @@ Backend (`backend/.env`)
 - `DEV_CORS_ORIGINS`: Dev CORS origins (comma‑separated) or `*`/`__ALL__` (dev only)
 - `CORS_ALLOWED_ORIGINS`: Production CORS origins (comma‑separated)
 - `ADMIN_DID`: Admin DID
-- `JETSTREAM_HOSTS`: Comma‑separated hostnames (without `wss://`)
+- `JETSTREAM_URL` (optional): Jetstream v2 base URL, default `https://jetstream.us-east.bsky.network`
 
 Frontend (`frontend/.env`)
 - `VITE_API_BASE_URL`: Backend HTTP base URL
@@ -109,10 +112,10 @@ Notes
 
 ## Behavior
 
-- Main Jetstream stream starts live by default
-- Backfill mode is active only when started with a cursor older than ~60 seconds
-- Backfill completion log includes the initial lag (seconds)
-- Ignored users are filtered in main and temporary streams before sending to Jetstream; DB insert also checks and skips
+- Ingestion resumes from the stored cursor (Jetstream keeps ~36h of live history); without one it starts live
+- The first event seen for an account only stores a baseline; Jetstream never delivers previous values
+- Profiles younger than one hour are treated as sign-up setup, not renames
+- v2 identity events carry no handle, so the current handle is read from the DID document; for unknown accounts the previous handle comes from the PLC audit log
 
 ## API
 
@@ -120,13 +123,13 @@ Auth
 - All routes require authentication (`X-User-DID`). Admin routes require the configured admin DID.
 
 User routes
-- `GET /api/changes`: Global profile changes
+- `GET /api/changes?limit=50&before=<id>`: Newest profile changes (paginated)
 - `GET /api/changes/:did/history`: Change history for a DID
-- `POST /api/monitoring/enable`: Enable monitoring for a user DID
-- `GET /api/monitoring/follows/:user_did`: List monitored follows
-- `GET /api/monitoring/changes/:user_did`: Changes for monitored follows
-- `DELETE /api/monitoring/disable/:user_did`: Disable monitoring
-- `GET /api/monitoring/status`: Monitoring status snapshot
+- `GET /api/monitoring/follows/:user_did`: DIDs the user follows (own DID only)
+- `GET /api/monitoring/changes/:user_did`: Changes among the user's follows (own DID only)
+- `DELETE /api/monitoring/purge/:user_did`: Delete the user's own changes (own DID only)
+- `POST /api/monitoring/enable`, `DELETE /api/monitoring/disable/:user_did`: no-ops kept for the current frontend
+- `GET /api/monitoring/status`: Ingestion status (admin)
 
 Admin routes
 - `GET /api/admin/stats`: Monitored counts, Jetstream state, cursor timestamp, backfill flag
