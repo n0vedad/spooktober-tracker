@@ -9,6 +9,7 @@ import type {
   ProfileChange,
 } from "../../shared/types";
 import { ENV } from "./utils/env";
+import type { Tier } from "./utils/tiers";
 
 // API Path
 const API_BASE = ENV.API_BASE_URL;
@@ -110,31 +111,48 @@ export async function getMyFollows(): Promise<
 }
 
 /**
- * Changes among the accounts the signed-in user follows.
- *
- * @returns Profile-change array.
+ * State of the signed-in user's bubble (second-degree network).
  */
-export async function getMyChanges(): Promise<ProfileChange[]> {
-  const data = await request<GetChangesResponse>(
-    "/me/changes",
+export type BubbleStatus =
+  | { state: "ready"; followsCount: number; computedAt: string }
+  | {
+      state: "computing";
+      done: number;
+      total: number;
+      previous: { followsCount: number; computedAt: string } | null;
+    }
+  | { state: "failed"; error: string };
+
+/**
+ * Get (and start computing, if missing or stale) the user's bubble.
+ *
+ * @param refresh Recompute even if the bubble is fresh.
+ * @returns Bubble state.
+ */
+export async function getBubbleStatus(refresh = false): Promise<BubbleStatus> {
+  return request<BubbleStatus>(
+    `/me/bubble?refresh=${refresh}`,
     {},
-    "Failed to fetch changes of your follows",
+    "Failed to load your bubble",
   );
-  return data.changes;
 }
 
 /**
- * Newest changes across the whole network.
+ * Changes among the user's follows, optionally extended into the bubble.
  *
- * @returns List of known profile changes.
+ * @param scope Farthest tier to include.
+ * @param sort Newest first, or closest accounts first.
+ * @returns Changes plus the bubble state (null for scope "follows").
  */
-export async function getGlobalChanges(): Promise<ProfileChange[]> {
-  const data = await request<GetChangesResponse>(
-    "/changes?limit=200",
+export async function getMyChanges(
+  scope: Tier = "follows",
+  sort: "recent" | "closeness" = "recent",
+): Promise<{ changes: ProfileChange[]; bubble: BubbleStatus | null }> {
+  return request(
+    `/me/changes?scope=${scope}&sort=${sort}`,
     {},
-    "Failed to fetch global changes",
+    "Failed to fetch changes",
   );
-  return data.changes;
 }
 
 /**

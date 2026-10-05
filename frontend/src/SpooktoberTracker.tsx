@@ -6,12 +6,14 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { ProfileChange } from "../../shared/types";
 import {
+  getBubbleStatus,
   getChangeHistory,
-  getGlobalChanges,
   getMyChanges,
   purgeMyData,
+  type BubbleStatus,
 } from "./api";
 import { formatGermanDateTime } from "./utils/date-formatter";
+import { TIER_OPTIONS, tierEmoji, type Tier } from "./utils/tiers";
 import { showError, showSuccess } from "./utils/toast-helpers";
 
 /**
@@ -26,7 +28,7 @@ interface Props {
 }
 
 /**
- * Render the tracker interface: known changes and changes among the user's follows.
+ * Render the tracker interface: changes among the user's follows and bubble.
  *
  * @param props.follows List of follow records of the signed-in user.
  * @returns JSX Fragment for the tracker.
@@ -35,7 +37,10 @@ export const SpooktoberTracker = (props: Props) => {
   // True while the "changes of my follows" view is shown
   const [monitoringEnabled, setMonitoringEnabled] = createSignal(false);
   const [changes, setChanges] = createSignal<ProfileChange[]>([]);
-  const [knownChangesLoaded, setKnownChangesLoaded] = createSignal(false);
+  // How far into the bubble the list reaches, and its order
+  const [scope, setScope] = createSignal<Tier>("bubble");
+  const [sort, setSort] = createSignal<"recent" | "closeness">("recent");
+  const [bubble, setBubble] = createSignal<BubbleStatus | null>(null);
   const [isLoadingChanges, setIsLoadingChanges] = createSignal(false);
   const [expandedDID, setExpandedDID] = createSignal<string | null>(null);
   const [history, setHistory] = createSignal<Map<string, ProfileChange[]>>(
@@ -59,6 +64,8 @@ export const SpooktoberTracker = (props: Props) => {
   // Intervals for periodic data refresh and countdown display
   let refreshInterval: number | null = null;
   let countdownInterval: number | null = null;
+  // Polls the bubble computation progress
+  let bubblePoll: number | null = null;
 
   // Delete all user data (stop monitoring, purge DB rows)
   const requestDeleteAllData = () => setShowDeleteConfirmation(true);
@@ -69,7 +76,6 @@ export const SpooktoberTracker = (props: Props) => {
       const result = await purgeMyData();
       setMonitoringEnabled(false);
       setChanges([]);
-      setKnownChangesLoaded(false);
       showSuccess(
         `Deleted your data${result.deletedChanges ? ` (${result.deletedChanges} change(s))` : ""}`,
         { duration: 4000 },
@@ -120,41 +126,6 @@ export const SpooktoberTracker = (props: Props) => {
   };
 
   /**
-   * Load known changes from the global community cache.
-   *
-   * @returns Promise resolving after changes state has been updated.
-   */
-  const loadKnownChanges = async () => {
-    setIsLoadingChanges(true);
-
-    // Group by DID and keep only latest change with old values
-    try {
-      const globalChanges = await getGlobalChanges();
-      const deduplicated = deduplicateChanges(globalChanges);
-
-      // Commit the deduplicated change set into local state.
-      setChanges(deduplicated);
-
-      // Invalidate cached history to ensure fresh data on next expand
-      setHistory(new Map());
-
-      // Mark known changes as loaded to toggle UI state
-      setKnownChangesLoaded(true);
-    } catch (err) {
-      showError(
-        err instanceof Error
-          ? err.message
-          : "Could not load profile changes. Please try again.",
-        { duration: 5000 },
-      );
-
-      // Always clear the loading flag regardless of outcome.
-    } finally {
-      setIsLoadingChanges(false);
-    }
-  };
-
-  /**
    * Retrieve latest monitored changes for current user.
    *
    * @returns Promise resolving after the latest change snapshot is stored.
@@ -164,13 +135,17 @@ export const SpooktoberTracker = (props: Props) => {
 
     // Watch for changes
     try {
-      const monitoredChanges = await getMyChanges();
+      const result = await getMyChanges(scope(), sort());
 
       // Server is connected
       setServerDisconnected(false);
 
+      // Follow the bubble computation until it is ready
+      setBubble(result.bubble);
+      if (result.bubble?.state === "computing") startBubblePoll();
+
       // Group by DID and keep only latest change with old values
-      const deduplicated = deduplicateChanges(monitoredChanges);
+      const deduplicated = deduplicateChanges(result.changes);
 
       // Set changes
       setChanges(deduplicated);
@@ -249,8 +224,8 @@ export const SpooktoberTracker = (props: Props) => {
    */
   const reset = () => {
     stopAutoRefresh(); // Stop auto-refresh when going back
+    stopBubblePoll();
     setMonitoringEnabled(false);
-    setKnownChangesLoaded(false);
     setChanges([]);
     setHistory(new Map());
     setExpandedDID(null);
@@ -313,6 +288,45 @@ export const SpooktoberTracker = (props: Props) => {
   };
 
   /**
+   * Poll the bubble computation and reload the list once it is done.
+   *
+   * @returns void
+   */
+  const startBubblePoll = () => {
+    if (bubblePoll) return;
+    bubblePoll = window.setInterval(async () => {
+      try {
+        const status = await getBubbleStatus();
+        setBubble(status);
+        if (status.state !== "computing") {
+          stopBubblePoll();
+          if (status.state === "ready") await loadChanges();
+        }
+      } catch {
+        stopBubblePoll();
+      }
+    }, 2000);
+  };
+
+  const stopBubblePoll = () => {
+    if (bubblePoll) clearInterval(bubblePoll);
+    bubblePoll = null;
+  };
+
+  /**
+   * Switch the scope or order and reload the list.
+   */
+  const changeView = async (next: {
+    scope?: Tier;
+    sort?: "recent" | "closeness";
+  }) => {
+    if (next.scope) setScope(next.scope);
+    if (next.sort) setSort(next.sort);
+    setVisibleCount(ITEMS_PER_PAGE);
+    await loadChanges();
+  };
+
+  /**
    * Jump directly into change view when monitoring already active.
    *
    * @returns Promise resolving after change data is loaded.
@@ -326,189 +340,14 @@ export const SpooktoberTracker = (props: Props) => {
   // Cleanup intervals on component unmount
   onCleanup(() => {
     stopAutoRefresh();
+    stopBubblePoll();
   });
 
   // JSX Frontend
   return (
     <div class="mt-6 w-full overflow-hidden">
-      {/* Load Known Changes Button */}
-      <Show when={!knownChangesLoaded() && !monitoringEnabled()}>
-        <button
-          onclick={loadKnownChanges}
-          disabled={props.follows.length === 0 || isLoadingChanges()}
-          class="mb-4 w-full rounded-lg bg-purple-600 px-4 py-3 text-base font-bold text-white hover:bg-purple-700 active:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isLoadingChanges()
-            ? "Loading..."
-            : props.follows.length === 0
-              ? "No Follows to Load Changes For"
-              : "Load Known Spooktober Changes"}
-        </button>
-      </Show>
-
-      {/* Delete confirmation is colocated near the delete button in the initial section */}
-      {/* Known Changes Display */}
-      <Show when={knownChangesLoaded() && !monitoringEnabled()}>
-        <div class="mb-4">
-          <Show when={changes().length > 0}>
-            <h3 class="mb-3 text-lg font-bold sm:text-xl">
-              📚 Known Changes ({changes().length})
-            </h3>
-            <div class="mb-4 space-y-3">
-              <For each={visibleChanges()}>
-                {(change) => {
-                  const follow = props.follows.find(
-                    (f) => f.did === change.did,
-                  );
-                  const isExpanded = () => expandedDID() === change.did;
-                  const changeHistory = () => history().get(change.did) || [];
-
-                  return (
-                    <div class="w-full min-w-0 rounded-lg border border-purple-300 bg-purple-50 dark:border-purple-700 dark:bg-purple-900/20">
-                      <div
-                        class="cursor-pointer p-4"
-                        onclick={() => toggleHistory(change.did)}
-                      >
-                        <div class="flex min-w-0 items-center justify-between gap-2">
-                          <span class="break-all font-bold">
-                            {follow?.handle || change.handle
-                              ? `@${follow?.handle || change.handle}`
-                              : change.did}
-                          </span>
-                          <span class="text-sm text-gray-500">
-                            {isExpanded() ? "▼" : "▶"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* History expansion */}
-                      <Show when={isExpanded()}>
-                        <div class="border-t border-purple-200 bg-purple-100/50 p-4 dark:border-purple-600 dark:bg-purple-900/10">
-                          <h4 class="mb-2 text-sm font-bold text-purple-800 dark:text-purple-300">
-                            Change History
-                          </h4>
-                          <Show
-                            when={changeHistory().length > 0}
-                            fallback={
-                              <p class="text-sm text-gray-500">
-                                Loading history...
-                              </p>
-                            }
-                          >
-                            <div class="space-y-2">
-                              <For
-                                each={changeHistory().filter(
-                                  (h) =>
-                                    h.old_display_name ||
-                                    h.old_avatar ||
-                                    h.old_handle,
-                                )}
-                              >
-                                {(historyItem) => (
-                                  <div class="rounded border border-purple-200 bg-white p-2 text-xs dark:border-purple-600 dark:bg-gray-800">
-                                    <div class="mb-1 text-gray-500">
-                                      {formatGermanDateTime(
-                                        historyItem.changed_at,
-                                        "short",
-                                        "medium",
-                                      )}
-                                    </div>
-                                    <Show
-                                      when={
-                                        historyItem.old_handle &&
-                                        historyItem.old_handle !==
-                                          historyItem.new_handle
-                                      }
-                                    >
-                                      <div>
-                                        <span class="font-semibold">
-                                          Handle:
-                                        </span>{" "}
-                                        <span class="line-through">
-                                          @{historyItem.old_handle}
-                                        </span>{" "}
-                                        → @{historyItem.new_handle}
-                                      </div>
-                                    </Show>
-                                    <Show
-                                      when={
-                                        historyItem.old_display_name &&
-                                        historyItem.old_display_name !==
-                                          historyItem.new_display_name
-                                      }
-                                    >
-                                      <div>
-                                        <span class="font-semibold">
-                                          DisplayName:
-                                        </span>{" "}
-                                        <span class="line-through">
-                                          {historyItem.old_display_name}
-                                        </span>{" "}
-                                        → {historyItem.new_display_name}
-                                      </div>
-                                    </Show>
-                                    <Show
-                                      when={
-                                        historyItem.old_avatar &&
-                                        historyItem.old_avatar !==
-                                          historyItem.new_avatar
-                                      }
-                                    >
-                                      <div>
-                                        <span class="font-semibold">
-                                          Avatar:
-                                        </span>{" "}
-                                        changed
-                                      </div>
-                                    </Show>
-                                  </div>
-                                )}
-                              </For>
-                            </div>
-                          </Show>
-                        </div>
-                      </Show>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-
-            {/* Load More Button */}
-            <Show when={hasMore()}>
-              <div class="mb-4 text-center">
-                <button
-                  onclick={loadMore}
-                  class="rounded bg-purple-600 px-6 py-2 text-sm font-bold text-white hover:bg-purple-700"
-                >
-                  Load More ({changes().length - visibleCount()} remaining)
-                </button>
-              </div>
-            </Show>
-          </Show>
-
-          {/* Empty state when no known changes are available */}
-          <Show when={changes().length === 0}>
-            <div class="mb-4 rounded-lg border border-purple-400 bg-purple-50 p-4 dark:border-purple-600 dark:bg-purple-900/20">
-              <p class="text-sm text-purple-700 dark:text-purple-400">
-                No known changes found in database yet. Start checking to
-                populate the database!
-              </p>
-            </div>
-          </Show>
-
-          {/* Back button: reset view to initial state */}
-          <button
-            onclick={reset}
-            class="w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
-          >
-            Back
-          </button>
-        </div>
-      </Show>
-
       {/* Initial State - Enable Monitoring or View Changes Button */}
-      <Show when={!monitoringEnabled() && !knownChangesLoaded()}>
+      <Show when={!monitoringEnabled()}>
         <div class="mb-4">
           <button
             onclick={viewChanges}
@@ -519,7 +358,7 @@ export const SpooktoberTracker = (props: Props) => {
               ? "Loading Changes..."
               : props.follows.length === 0
                 ? "You don't follow anyone yet"
-                : `🎃 View Changes of Your ${props.follows.length} Follows`}
+                : "🎃 View Spooky Changes"}
           </button>
 
           {/* Delete confirmation shown directly above the delete button */}
@@ -583,6 +422,76 @@ export const SpooktoberTracker = (props: Props) => {
             </button>
           </div>
 
+          {/* Scope selector: how far into the bubble */}
+          <div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <For each={TIER_OPTIONS}>
+              {(option) => (
+                <button
+                  onclick={() => changeView({ scope: option.tier })}
+                  title={option.hint}
+                  aria-pressed={scope() === option.tier}
+                  class={`rounded-lg border px-2 py-2 text-sm font-semibold ${
+                    scope() === option.tier
+                      ? "border-orange-500 bg-orange-600 text-white"
+                      : "border-gray-300 bg-white hover:bg-orange-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {option.emoji} {option.label}
+                </button>
+              )}
+            </For>
+          </div>
+          <div class="mb-3 flex items-center justify-between gap-2 text-sm">
+            <span class="text-gray-600 dark:text-gray-400">
+              {TIER_OPTIONS.find((o) => o.tier === scope())?.hint}
+            </span>
+            <button
+              onclick={() =>
+                changeView({
+                  sort: sort() === "recent" ? "closeness" : "recent",
+                })
+              }
+              class="shrink-0 rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            >
+              {sort() === "recent" ? "🕒 Newest first" : "🫂 Closest first"}
+            </button>
+          </div>
+
+          {/* Bubble computation progress */}
+          <Show when={bubble()?.state === "computing" && bubble()}>
+            {(status) => {
+              const computing = () =>
+                status() as Extract<BubbleStatus, { state: "computing" }>;
+              const percent = () =>
+                computing().total
+                  ? Math.round((computing().done / computing().total) * 100)
+                  : 0;
+              return (
+                <div class="mb-3 rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm dark:border-purple-700 dark:bg-purple-900/30">
+                  <div class="mb-2">
+                    👻 Mapping your bubble… {computing().done} /{" "}
+                    {computing().total} follows checked
+                    <Show when={!computing().previous}>
+                      {" "}
+                      - showing your follows until it is done.
+                    </Show>
+                  </div>
+                  <div class="h-2 w-full overflow-hidden rounded bg-purple-200 dark:bg-purple-800">
+                    <div
+                      class="h-2 bg-purple-600 transition-all"
+                      style={{ width: `${percent()}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            }}
+          </Show>
+          <Show when={bubble()?.state === "failed"}>
+            <div class="mb-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
+              Could not map your bubble right now - showing your follows only.
+            </div>
+          </Show>
+
           {/* Changes Display */}
           <Show
             when={changes().length > 0 || isLoadingChanges()}
@@ -597,8 +506,8 @@ export const SpooktoberTracker = (props: Props) => {
                   }
                 >
                   <p class="text-gray-600 dark:text-gray-400">
-                    No changes among your follows yet. The whole network is
-                    tracked 24/7 - check back later!
+                    No changes here yet. The whole network is tracked 24/7 -
+                    check back later!
                   </p>
                 </Show>
               </div>
@@ -624,6 +533,7 @@ export const SpooktoberTracker = (props: Props) => {
                       >
                         <div class="mb-2 flex min-w-0 items-center justify-between gap-2">
                           <span class="break-all font-bold">
+                            {tierEmoji(change.tier)}{" "}
                             {follow?.handle || change.handle
                               ? `@${follow?.handle || change.handle}`
                               : change.did}
@@ -632,6 +542,13 @@ export const SpooktoberTracker = (props: Props) => {
                             {isExpanded() ? "▼" : "▶"}
                           </span>
                         </div>
+                        <Show when={change.common_follows}>
+                          {(count) => (
+                            <div class="mb-2 text-xs text-gray-600 dark:text-gray-400">
+                              followed by {count()} of your follows
+                            </div>
+                          )}
+                        </Show>
 
                         {/* Handle Change */}
                         <Show
