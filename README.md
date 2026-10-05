@@ -4,7 +4,8 @@ Tracks Bluesky profile changes (handle, display name, avatar) across the whole n
 
 ## Features
 
-- OAuth and app‑password login
+- Bluesky OAuth login handled by the backend (identity only, `atproto` scope; tokens are revoked right after login)
+- HttpOnly session cookie, cross-site request protection
 - Network-wide ingestion of profile records and identity events (Jetstream v2)
 - Last known profile state per account stored in Postgres, so changes survive restarts
 - Per-user view: changes among the accounts you follow
@@ -50,9 +51,9 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-4) OAuth client metadata
-- Set values in `frontend/.env` (see Environment Variables)
-- The Vite build emits `client-metadata.json` and serves it in dev
+4) OAuth
+- Development needs no setup: with `PUBLIC_URL` unset the backend acts as a public loopback client on `http://127.0.0.1:3000`
+- Production: run `pnpm --filter backend gen-key`, set the output as `OAUTH_PRIVATE_KEY_JWK` and set `PUBLIC_URL`; the backend serves `/oauth-client-metadata.json` and `/jwks.json`
 
 ## Run
 
@@ -60,8 +61,9 @@ Dev
 ```
 pnpm dev
 ```
-- Frontend dev server: `VITE_DEV_SERVER_HOST:VITE_DEV_SERVER_PORT` (default `127.0.0.1:13214`)
-- Backend: `HOST:PORT` (default `0.0.0.0:3000`)
+- Frontend dev server: `VITE_DEV_SERVER_HOST:VITE_DEV_SERVER_PORT` (default `127.0.0.1:13214`); it proxies `/api`, `/oauth` and `/ws` to the backend
+- Backend: `PORT` (default `3000`); set `FRONTEND_URL=http://127.0.0.1:13214` so the login returns to the dev server
+- Open the app via `http://127.0.0.1:13214` (not `localhost`), so the session cookie matches the OAuth callback host
 
 Build + start
 ```
@@ -96,19 +98,13 @@ Backend (`backend/.env`)
 - `ADMIN_DID`: Admin DID
 - `JETSTREAM_URL` (optional): Jetstream v2 base URL, default `https://jetstream.us-east.bsky.network`
 
-Frontend (`frontend/.env`)
-- `VITE_API_BASE_URL`: Backend HTTP base URL
-- `VITE_WS_URL`: Backend WebSocket URL
-- `VITE_OAUTH_SCOPE`: Space‑separated Bluesky scopes
-- `VITE_OAUTH_CLIENT_ID`: OAuth client ID (public metadata URL in prod)
-- `VITE_OAUTH_REDIRECT_URL`: OAuth redirect URL
-- `VITE_CLIENT_URI`: Public client base URL
-- `VITE_CLIENT_METADATA_NAME` (prod): Client display name
-- Dev server only: `VITE_DEV_SERVER_HOST`, `VITE_DEV_SERVER_PORT`, `VITE_PUBLIC_HOST`
+- `PUBLIC_URL` (production): Public origin of the backend (OAuth client_id/redirect_uri derive from it)
+- `FRONTEND_URL` (optional): Where the browser lands after login, default `PUBLIC_URL`
+- `OAUTH_PRIVATE_KEY_JWK` (production): Confidential OAuth client key from `pnpm --filter backend gen-key`
 
-Notes
-- In development, you can use the Bluesky localhost helper `client_id` and a local redirect URL
-- In production, host `client-metadata.json` and set `VITE_OAUTH_CLIENT_ID` to its public URL
+Frontend (`frontend/.env`, development only, all optional)
+- `VITE_DEV_SERVER_HOST`, `VITE_DEV_SERVER_PORT`, `VITE_PUBLIC_HOST`
+- `VITE_BACKEND_URL`: Backend the dev server proxies to, default `http://127.0.0.1:3000`
 
 ## Behavior
 
@@ -121,34 +117,31 @@ Notes
 ## API
 
 Auth
-- All routes require authentication (`X-User-DID`). Admin routes require the configured admin DID.
+- Requests are authenticated by the `spooky_session` cookie set after the OAuth login. Admin routes require the configured `ADMIN_DID`.
+- `GET /oauth/login?handle=<handle>`: Start login; `GET /oauth/callback`: OAuth redirect target
+- `POST /api/auth/logout`: End the session
+- `GET /api/me`: Signed-in account (`did`, `handle`, `isAdmin`)
 
 User routes
+- `GET /api/me/follows`: Accounts you follow
+- `GET /api/me/changes`: Changes among the accounts you follow
+- `DELETE /api/me/data`: Delete your own changes and stored profile state
 - `GET /api/changes?limit=50&before=<id>`: Newest profile changes (paginated)
 - `GET /api/changes/:did/history`: Change history for a DID
-- `GET /api/monitoring/follows/:user_did`: DIDs the user follows (own DID only)
-- `GET /api/monitoring/changes/:user_did`: Changes among the user's follows (own DID only)
-- `DELETE /api/monitoring/purge/:user_did`: Delete the user's own changes (own DID only)
-- `POST /api/monitoring/enable`, `DELETE /api/monitoring/disable/:user_did`: no-ops kept for the current frontend
-- `GET /api/monitoring/status`: Ingestion status (admin)
 
 Admin routes
-- `GET /api/admin/stats`: Monitored counts, Jetstream state, cursor timestamp, backfill flag
-- `GET /api/admin/jetstream/recommended-cursor`: Recommended start cursor
-- `POST /api/admin/jetstream/start`: Start Jetstream (optional cursor)
-- `POST /api/admin/jetstream/stop`: Stop Jetstream
-- `GET /api/admin/ignored-users`: List ignored users
-- `POST /api/admin/ignored-users`: Add ignored user
-- `DELETE /api/admin/ignored-users/:did`: Remove ignored user
-- `GET /api/admin/noisy-accounts`: Accounts flagged as bots
-- `DELETE /api/admin/noisy-accounts/:did`: Remove bot flag
+- `GET /api/admin/stats`: Tracked accounts, ingestion state, last event time
+- `GET /api/admin/jetstream/recommended-cursor`: Cursor of the last processed event
+- `POST /api/admin/jetstream/start`: Start ingestion (optional cursor)
+- `POST /api/admin/jetstream/stop`: Stop ingestion
+- `GET /api/admin/ignored-users`, `POST /api/admin/ignored-users`, `DELETE /api/admin/ignored-users/:did`: Ignore list
+- `GET /api/admin/noisy-accounts`, `DELETE /api/admin/noisy-accounts/:did`: Accounts flagged as bots
 
 ## Troubleshooting
 
-- OAuth `/oauth/par` 400: ensure client metadata is publicly reachable and redirect URL matches
-- Local build login fails after `pnpm start`: confirm `frontend/.env` points to backend before `pnpm build`
+- OAuth `/oauth/par` 400 in production: ensure `/oauth-client-metadata.json` is publicly reachable at `PUBLIC_URL`
+- Logged out right after login in development: open the app via `127.0.0.1`, not `localhost`
 - DB connection errors: verify `DATABASE_URL` and role credentials
-- Unauthorized: ensure `X-User-DID` is present (logged in)
 
 ## License
 
