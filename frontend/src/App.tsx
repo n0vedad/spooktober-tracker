@@ -5,40 +5,10 @@
 
 // Base
 import { createEffect, createSignal, onMount, Show } from "solid-js";
-
-// Needed for Declaration Merging
-import type {} from "@atcute/atproto";
-import type {} from "@atcute/bluesky";
-
-// Bluesky
-import { Client, CredentialManager } from "@atcute/client";
-import { ActorIdentifier, Did, Handle } from "@atcute/lexicons";
-import {
-  configureOAuth,
-  createAuthorizationUrl,
-  deleteStoredSession,
-  finalizeAuthorization,
-  getSession,
-  OAuthUserAgent,
-  resolveFromIdentity,
-  type Session,
-} from "@atcute/oauth-browser-client";
 import { Toaster } from "solid-toast";
 import { AdminPanel } from "./AdminPanel";
-import { resolveHandle as resolveDidToHandle } from "./api";
+import { getMe, getMyFollows, logout, startLogin, type Me } from "./api";
 import { SpooktoberTracker } from "./SpooktoberTracker";
-import { ENV } from "./utils/env";
-
-// Admin DID
-const ADMIN_DID = ENV.ADMIN_DID;
-
-// Configure the OAuth metadata using project-specific environment values.
-configureOAuth({
-  metadata: {
-    client_id: ENV.OAUTH_CLIENT_ID,
-    redirect_uri: ENV.OAUTH_REDIRECT_URL,
-  },
-});
 
 // Pairing of a DID with its corresponding handle returned from follow lookups.
 type FollowResult = {
@@ -52,271 +22,90 @@ type Notice = {
   tone: "info" | "error";
 };
 
-/**
- * Auth state for the current session:
- * - rpc: AT Protocol client (initialized after auth)
- * - agent: OAuth agent handling tokens/requests
- * - agentDID: DID of the authenticated user
- * - credentialManager: App‑password credential manager
- */
-let rpc: Client;
-let agent: OAuthUserAgent | undefined;
-let agentDID = "";
-let credentialManager: CredentialManager | undefined;
+// Messages for the error codes the backend appends after a failed login
+const LOGIN_ERRORS: Record<string, string> = {
+  resolve_failed:
+    "Could not find that account. Check the handle and try again.",
+  denied: "Login was cancelled.",
+  callback_failed: "Login failed. Please try again.",
+  session_failed: "Login failed on our side. Please try again.",
+};
 
 /**
- * Encapsulates login state, handles OAuth redirect flow and app-password login.
+ * Encapsulates login state: session lookup, OAuth redirect and logout.
  *
  * @returns Signals and actions exposed to the UI for authentication.
  */
 const Login = () => {
   const [loginInput, setLoginInput] = createSignal("");
-  const [password, setPassword] = createSignal("");
-  const [handle, setHandle] = createSignal("");
+  const [me, setMe] = createSignal<Me | null>(null);
   const [notice, setNotice] = createSignal<Notice | null>(null);
-  const [loginState, setLoginState] = createSignal(false);
-  const APP_PASSWORD_REGEX = /^[a-z0-9]{4}(?:-[a-z0-9]{4}){3}$/i;
+  const [checking, setChecking] = createSignal(true);
 
-  // Loading Follows
+  // Restore the session (cookie) and surface errors from a failed login
   onMount(async () => {
-    setNotice({ message: "Loading...", tone: "info" });
-
-    /**
-     * Attempt to hydrate a session, either via OAuth callback hash or cached DID.
-     *
-     * @returns Active session when found, otherwise undefined.
-     */
-    const init = async (): Promise<Session | undefined> => {
-      const params = new URLSearchParams(location.hash.slice(1));
-
-      // Handle OAuth callback by finalizing the authorization code exchange.
-      if (params.has("state") && (params.has("code") || params.has("error"))) {
-        history.replaceState(null, "", "/");
-
-        // Complete OAuth exchange and extract the authenticated user's DID
-        const session = await finalizeAuthorization(params);
-        const did = session.info.sub;
-
-        // Cache the last signed-in DID for session rehydration on reload
-        localStorage.setItem("lastSignedIn", did);
-        return session;
-
-        // Fall back to any cached DID-based session stored locally.
-      } else {
-        const lastSignedIn = localStorage.getItem("lastSignedIn");
-
-        // Attempt to rehydrate a stored session using the cached DID
-        if (lastSignedIn) {
-          try {
-            // Load session from browser storage; on failure we clear the cache below
-            return await getSession(lastSignedIn as Did);
-
-            // Clear stale session entries when rehydration fails.
-          } catch (err) {
-            localStorage.removeItem("lastSignedIn");
-            throw err;
-          }
-        }
-      }
-    };
-
-    // Ignore initialization failures so the login UI stays usable.
-    const session = await init().catch(() => {});
-
-    // Hydrate authenticated client state from the recovered session.
-    if (session) {
-      credentialManager = undefined;
-      agent = new OAuthUserAgent(session);
-      rpc = new Client({ handler: agent });
-      agentDID = agent.sub;
-
-      // Mark the UI as authenticated and resolve the user's handle for display
-      setLoginState(true);
-      setHandle((await resolveDidToHandle(agent.sub)) ?? "");
+    const params = new URLSearchParams(location.search);
+    const loginError = params.get("login_error");
+    if (loginError) {
+      history.replaceState(null, "", "/");
+      setNotice({
+        message: LOGIN_ERRORS[loginError] ?? "Login failed.",
+        tone: "error",
+      });
     }
 
-    setNotice(null);
+    try {
+      setMe(await getMe());
+    } catch {
+      setNotice({
+        message: "Could not reach the server. Please try again later.",
+        tone: "error",
+      });
+    } finally {
+      setChecking(false);
+    }
   });
 
   /**
-   * Lookup PDS endpoint for a DID.
-   *
-   * @param did DID that needs a PDS host.
-   * @returns PDS URL or undefined.
-   */
-  const getPDS = async (did: string) => {
-    const res = await fetch(
-      did.startsWith("did:web")
-        ? `https://${did.split(":")[2]}/.well-known/did.json`
-        : "https://plc.directory/" + did,
-    );
-
-    // Parse the DID document to locate the PDS service endpoint.
-    return res.json().then((doc: any) => {
-      for (const service of doc.service) {
-        if (service.id === "#atproto_pds") return service.serviceEndpoint;
-      }
-    });
-  };
-
-  /**
-   * Resolve a handle to DID via public Bluesky API.
-   *
-   * @param handle Bluesky handle.
-   * @returns DID string on success.
-   */
-  const resolveHandleToDid = async (handle: string) => {
-    const rpc = new Client({
-      handler: new CredentialManager({
-        service: "https://public.api.bsky.app",
-      }),
-    });
-
-    // Query the public identity service to resolve the handle.
-    const res = await rpc.get("com.atproto.identity.resolveHandle", {
-      params: { handle: handle as Handle },
-    });
-
-    // Surface API errors as thrown exceptions for the caller.
-    if (!res.ok) throw new Error(res.data.error);
-    return res.data.did;
-  };
-
-  /**
-   * Execute login flow depending on whether an app password was supplied.
+   * Start the OAuth login for the entered handle.
    *
    * @param login Handle or DID supplied by the user.
-   * @returns Promise resolving once the login flow completes or redirects.
    */
-  const loginBsky = async (login: string) => {
-    setNotice(null);
-    if (password()) {
-      if (!APP_PASSWORD_REGEX.test(password())) {
-        setNotice({
-          message: "That's not a valid app password!",
-          tone: "error",
-        });
-        return;
-      }
-
-      // Switch to app‑password flow (no OAuth agent)
-      agent = undefined;
-      // Resolve DID from handle when necessary
-      agentDID = login.startsWith("did:")
-        ? login
-        : await resolveHandleToDid(login);
-
-      // Create credential manager pointing at the user's PDS
-      const manager = new CredentialManager({
-        service: await getPDS(agentDID),
-      });
-
-      // Store manager and bind AT client to it
-      credentialManager = manager;
-      rpc = new Client({ handler: manager });
-
-      // App-password flow: authenticate explicitly against the user's PDS.
-      await manager.login({
-        identifier: agentDID,
-        password: password(),
-      });
-
-      // Mark the UI as authenticated and resolve the user's handle for display
-      setLoginState(true);
-      setHandle((await resolveDidToHandle(agentDID)) ?? "");
-
-      // Begin OAuth flow by resolving whatever identity string was provided.
-    } else {
-      credentialManager = undefined;
-      try {
-        setNotice({ message: `Resolving your identity...`, tone: "info" });
-        const resolved = await resolveFromIdentity(login);
-
-        // Exchange resolved identity for an authorization URL from the user's PDS.
-        setNotice({
-          message: `Contacting your data server...`,
-          tone: "info",
-        });
-        const authUrl = await createAuthorizationUrl({
-          scope: ENV.OAUTH_SCOPE,
-          ...resolved,
-        });
-
-        // Provide a short UX pause before redirecting to OAuth consent.
-        setNotice({ message: `Redirecting...`, tone: "info" });
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        location.assign(authUrl);
-
-        // Notify user when OAuth bootstrap fails (e.g., network issues).
-      } catch (err) {
-        if (err instanceof Error) {
-          const message = err.message.toLowerCase();
-          if (
-            message.includes("domain handle not found") ||
-            message.includes("invalid identifier") ||
-            message.includes("handle must be a valid handle")
-          ) {
-            setNotice({ message: "Invalid Handle!", tone: "error" });
-            return;
-          }
-
-          // Show specific backend error message when available
-          setNotice({
-            message: err.message || "Error during OAuth login",
-            tone: "error",
-          });
-          return;
-        }
-
-        // Fallback: generic error when error shape is unknown
-        setNotice({ message: "Error during OAuth login", tone: "error" });
-      }
+  const loginBsky = (login: string) => {
+    const handle = login.trim();
+    if (!handle) {
+      setNotice({ message: "Please enter your handle.", tone: "error" });
+      return;
     }
+    setNotice({ message: "Redirecting to Bluesky...", tone: "info" });
+    startLogin(handle);
   };
 
   /**
-   * Sign out the current OAuth agent and reset state.
+   * End the session and reset state.
    *
-   * @returns Promise resolving after the agent signs out.
+   * @returns Promise resolving after the backend session is closed.
    */
   const logoutBsky = async () => {
     try {
-      if (credentialManager?.session) {
-        const refreshJwt = credentialManager.session.refreshJwt;
-        await rpc.post("com.atproto.server.deleteSession", {
-          headers: { authorization: `Bearer ${refreshJwt}` },
-          as: null,
-        });
-
-        // Bluesky’s public revoke endpoint fails for browsers with `use_dpop_nonce`,
-        // so we clear the cached session locally instead of attempting a remote revoke.
-      } else if (agent) {
-        deleteStoredSession(agent.sub);
-      }
-    } catch (err) {
-      // Log and surface a non-blocking notice; local state is cleared below
+      await logout();
+    } catch {
       setNotice({
-        message: "Logout completed locally (remote revoke failed)",
+        message: "Logout failed on the server; you are logged out locally.",
         tone: "info",
       });
     } finally {
-      credentialManager = undefined;
-      agent = undefined;
-      agentDID = "";
-      localStorage.removeItem("lastSignedIn");
-      setLoginState(false);
+      setMe(null);
     }
   };
 
   // Return states
   return {
-    loginState,
-    handle,
+    me,
+    checking,
     notice,
     loginInput,
     setLoginInput,
-    password,
-    setPassword,
     loginBsky,
     logoutBsky,
   };
@@ -330,78 +119,22 @@ const Login = () => {
 const Fetch = () => {
   const [follows, setFollows] = createSignal<FollowResult[]>([]);
   const [loading, setLoading] = createSignal(false);
+  const [loaded, setLoaded] = createSignal(false);
 
   /**
-   * Pull paginated follow data via app.bsky.graph.getFollows.
+   * Load the follow list from the backend.
    *
-   * @returns Promise resolving once all follow pages have been loaded.
+   * @returns Promise resolving once the follows have been loaded.
    */
   const fetchFollows = async () => {
     setLoading(true);
-    const PAGE_LIMIT = 100;
-    const fetchPage = async (cursor?: string) => {
-      const MAX_ATTEMPTS = 4;
-      let attempt = 0;
-
-      // Retry when Bluesky requests a fresh DPoP nonce.
-      while (true) {
-        const response = await rpc.get("app.bsky.graph.getFollows", {
-          params: {
-            actor: agentDID as ActorIdentifier,
-            limit: PAGE_LIMIT,
-            cursor: cursor,
-          },
-        });
-
-        // Success: break the retry loop by returning the response
-        if (response.ok) return response;
-        // Bump attempt counter after a failed request
-        attempt += 1;
-
-        // Bluesky requires a fresh DPoP nonce occasionally; retry a few times
-        if (
-          response.data.error === "use_dpop_nonce" &&
-          attempt < MAX_ATTEMPTS
-        ) {
-          // Short incremental backoff (200ms, 400ms, 600ms, ...)
-          await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
-          continue;
-        }
-
-        return response;
-      }
-    };
-
-    // Ensure the first page resolved successfully before proceeding.
     try {
-      let res = await fetchPage();
-      if (!res.ok) {
-        throw new Error(res.data.error);
-      }
-      let allFollows = res.data.follows;
-
-      // Continue fetching while the API supplies a pagination cursor.
-      while (res.data.cursor) {
-        res = await fetchPage(res.data.cursor);
-        if (!res.ok) {
-          throw new Error(res.data.error);
-        }
-        allFollows = allFollows.concat(res.data.follows);
-      }
-
-      // Shape the aggregated follow list into DID/handle pairs.
-      setFollows(
-        allFollows.map((f: any) => ({
-          did: f.did,
-          handle: f.handle,
-        })),
-      );
-
-      // Reset loading state regardless of success or failure.
+      setFollows(await getMyFollows());
     } catch {
-      // Ignore follow fetch errors
+      // Ignore follow fetch errors; the tracker shows an empty state
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   };
 
@@ -409,6 +142,7 @@ const Fetch = () => {
   return {
     follows,
     loading,
+    loaded,
     fetchFollows,
   };
 };
@@ -433,11 +167,7 @@ const App = () => {
 
   // Auto-fetch follows when logged in
   createEffect(() => {
-    if (
-      login.loginState() &&
-      fetch.follows().length === 0 &&
-      !fetch.loading()
-    ) {
+    if (login.me() && !fetch.loaded() && !fetch.loading()) {
       fetch.fetchFollows();
     }
   });
@@ -482,7 +212,7 @@ const App = () => {
                   🎃 Spooktober Tracker
                 </div>
                 <div class="flex basis-1/3 justify-end gap-x-2">
-                  <Show when={login.loginState()}>
+                  <Show when={login.me()}>
                     <button
                       class="flex cursor-pointer items-center justify-center rounded px-2 py-1 text-slate-700 dark:text-slate-100"
                       title="Logout"
@@ -494,15 +224,13 @@ const App = () => {
                 </div>
               </div>
               <div class="mb-4 flex flex-col items-center">
-                <Show
-                  when={
-                    !login.loginState() &&
-                    login.notice()?.message !== "Loading..."
-                  }
-                >
+                <Show when={!login.me() && !login.checking()}>
                   <form
                     class="flex w-full max-w-md flex-col px-4"
-                    onsubmit={(e) => e.preventDefault()}
+                    onsubmit={(e) => {
+                      e.preventDefault();
+                      login.loginBsky(login.loginInput());
+                    }}
                   >
                     <label for="handle" class="ml-0.5 text-sm">
                       Handle
@@ -511,33 +239,23 @@ const App = () => {
                       type="text"
                       id="handle"
                       placeholder="user.bsky.social"
-                      class="dark:bg-dark-100 mb-3 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autocomplete="username"
+                      class="dark:bg-dark-100 mb-4 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                       onInput={(e) =>
                         login.setLoginInput(e.currentTarget.value)
                       }
                     />
-                    <label for="password" class="ml-0.5 text-sm">
-                      App Password
-                    </label>
-                    <input
-                      type="password"
-                      id="password"
-                      placeholder="supersecretpassword"
-                      class="dark:bg-dark-100 mb-4 w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      onInput={(e) => login.setPassword(e.currentTarget.value)}
-                    />
                     <button
-                      onclick={() => login.loginBsky(login.loginInput())}
+                      type="submit"
                       class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
                     >
-                      Login
+                      Login with Bluesky
                     </button>
                   </form>
 
                   {(() => {
                     const current = login.notice();
-                    if (!current || current.message === "Loading...")
-                      return null;
+                    if (!current) return null;
 
                     const isInfo = current.tone === "info";
                     const base =
@@ -561,19 +279,11 @@ const App = () => {
                     </h4>
                     <div class="space-y-2 text-xs text-blue-900 sm:text-sm dark:text-blue-200">
                       <p>
-                        <strong>Option 1: App Password</strong>
-                        <br />
-                        Enter your Bluesky handle and an app password. You can
-                        create an app password in your Bluesky settings under
-                        "App Passwords". This is safer than using your main
-                        password.
-                      </p>
-                      <p>
-                        <strong>Option 2: OAuth Login (Recommended)</strong>
-                        <br />
-                        Leave the password field empty and click "Login". You'll
-                        be redirected to Bluesky to authorize this app. This is
-                        the most secure option as you never share your password.
+                        Enter your Bluesky handle and click "Login". You'll be
+                        redirected to your Bluesky server to confirm. Your
+                        password never touches this site, and we only ask for
+                        proof of who you are - no permission to post or change
+                        anything.
                       </p>
                     </div>
                   </div>
@@ -586,82 +296,55 @@ const App = () => {
                     <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
                       <p>
                         <strong>What is Spooktober Tracker?</strong>
-                        <br />A community tool that monitors Bluesky profile
-                        changes during spooky season (October). When you enable
-                        monitoring, we track changes to handles, display names,
-                        and avatars for all the accounts you follow - helping
-                        everyone see who's getting spooky! 🎃
+                        <br />A community tool that shows Bluesky profile
+                        changes during spooky season (October): new handles,
+                        display names and avatars - so you can see who's getting
+                        spooky! 🎃
                       </p>
                       <p>
-                        <strong>How does monitoring work?</strong>
+                        <strong>How does it work?</strong>
                         <br />
-                        After enabling monitoring, our server watches your
-                        follows in real-time via Bluesky's Jetstream API.{" "}
-                        <strong>
-                          Due limitations on Bluesky side only last 24 hours per
-                          user could be catched up.
-                        </strong>{" "}
-                        When someone changes their profile, it's logged
-                        instantly. The server runs 24/7, so you don't need to
-                        keep this page open - changes are tracked automatically!
+                        Our server watches public profile updates across the
+                        whole network in real time via Bluesky's Jetstream. You
+                        don't need to enable anything or keep this page open.
+                        After logging in you see the changes of the accounts you
+                        follow.
                       </p>
                       <p>
                         <strong>What data is collected?</strong>
                         <br />
-                        We only store <em>publicly visible</em> profile changes:
-                        handles (e.g., @user.bsky.social), display names, and
-                        avatar references. We never store passwords, private
-                        posts, or OAuth tokens. All monitoring data is shared
-                        across the community - when you enable monitoring, you
-                        help everyone track spooky changes!
+                        Only <em>publicly visible</em> profile data: handles,
+                        display names and avatar references. We never store
+                        passwords, private posts or OAuth tokens. Bots and
+                        brand-new accounts setting up their profile are filtered
+                        out.
                       </p>
                       <p>
-                        <strong>
-                          Can I see changes even without monitoring?
-                        </strong>
+                        <strong>Can I remove my data?</strong>
                         <br />
-                        Yes! Click "Load Known Spooktober Changes" to see all
-                        profile changes tracked by the community. You only need
-                        to enable monitoring if you want to contribute your
-                        follows to the tracking database.
-                      </p>
-                      <p>
-                        <strong>How do I stop monitoring?</strong>
-                        <br />
-                        Click the "Stop Monitoring" button anytime. Your follows
-                        will no longer be tracked, but existing change history
-                        stays in the database to help the community. You can
-                        re-enable monitoring later if you want!
-                      </p>
-                      <p>
-                        <strong>Is this safe?</strong>
-                        <br />
-                        Yes! We use Bluesky's official OAuth for login (if you
-                        dont use app passwords) - your password never touches
-                        our servers. OAuth tokens stay in your browser's secure
-                        storage. We only read public profile data that anyone on
-                        Bluesky can see.
+                        Yes. After logging in, click "Delete all my data" to
+                        remove your own profile change history.
                       </p>
                     </div>
                   </div>
                 </Show>
-                <Show when={login.loginState() && login.handle()}>
+                <Show when={login.me()?.handle}>
                   <div class="mb-4 text-center text-sm sm:text-base">
-                    Logged in as @{login.handle()}
+                    Logged in as @{login.me()?.handle}
                   </div>
                 </Show>
-                <Show when={login.notice()?.message === "Loading..."}>
+                <Show when={login.checking()}>
                   <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
-                    {login.notice()?.message}
+                    Loading...
                   </div>
                 </Show>
               </div>
 
-              <Show when={login.loginState()}>
+              <Show when={login.me()}>
                 <div class="flex flex-col items-center">
                   {/* Admin Panel */}
-                  <Show when={agentDID === ADMIN_DID}>
-                    <AdminPanel userDID={agentDID} />
+                  <Show when={login.me()?.isAdmin}>
+                    <AdminPanel />
                   </Show>
 
                   <Show when={fetch.loading()}>
@@ -669,9 +352,8 @@ const App = () => {
                   </Show>
 
                   {/* Spooktober Tracker */}
-                  <Show when={!fetch.loading() && fetch.follows().length > 0}>
+                  <Show when={fetch.loaded() && !fetch.loading()}>
                     <SpooktoberTracker
-                      userDID={agentDID}
                       follows={fetch.follows()}
                       onLogout={login.logoutBsky}
                     />

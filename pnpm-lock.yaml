@@ -99,18 +99,6 @@ importers:
 
   frontend:
     dependencies:
-      '@atcute/atproto':
-        specifier: ^3.1.4
-        version: 3.1.4
-      '@atcute/client':
-        specifier: ^4.0.3
-        version: 4.0.3
-      '@atcute/lexicons':
-        specifier: ^1.1.1
-        version: 1.1.1
-      '@atcute/oauth-browser-client':
-        specifier: ^1.0.26
-        version: 1.0.26
       solid-js:
         specifier: ^1.9.9
         version: 1.9.9
@@ -118,9 +106,6 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0(solid-js@1.9.9)
     devDependencies:
-      '@atcute/bluesky':
-        specifier: ^3.2.3
-        version: 3.2.3
       '@iconify-json/lucide':
         specifier: ^1.2.68
         version: 1.2.68
@@ -163,15 +148,6 @@ packages:
   '@antfu/utils@8.1.1':
     resolution: {integrity: sha512-Mex9nXf9vR6AhcXmMrlz/HVgYYZpVGJ6YlPgwl7UnaFpnshXs6EK/oa5Gpf3CzENMjkvEx2tQtntGnb7UtSTOQ==}
 
-  '@atcute/atproto@3.1.4':
-    resolution: {integrity: sha512-v0/ue7mZYtjYw4vWbtda51bLwW88mqsUQB8F/UZNO18ANAQWmKq1HDceVqjvruaLe2QPqE43XM3WkEyZ2FhOrA==}
-
-  '@atcute/bluesky@3.2.3':
-    resolution: {integrity: sha512-IdPQQ54F1BLhW5z49k81ZUC/GQl/tVygZ+CzLHYvQySHA6GJRcvPzwEf8aV21u0SZOJF+yF4CWEGNgtryyxPmg==}
-
-  '@atcute/client@4.0.3':
-    resolution: {integrity: sha512-RIOZWFVLca/HiPAAUDqQPOdOreCxTbL5cb+WUf5yqQOKIu5yEAP3eksinmlLmgIrlr5qVOE7brazUUzaskFCfw==}
-
   '@atcute/client@5.1.2':
     resolution: {integrity: sha512-V3MOJudmmbuiFfrmLR3/ZGA+PKcI4E4ZNEDGKMX/YrvFrHyElD1/gb8NxLesrlIcHefiulqfX9dAl6hOkIt7CA==}
     peerDependencies:
@@ -190,28 +166,16 @@ packages:
       '@atcute/identity': ^2.0.0
       '@atcute/lexicons': ^2.0.0
 
-  '@atcute/identity@1.1.0':
-    resolution: {integrity: sha512-6vRvRqJatDB+JUQsb+UswYmtBGQnSZcqC3a2y6H5DB/v5KcIh+6nFFtc17G0+3W9rxdk7k9M4KkgkdKf/YDNoQ==}
-
   '@atcute/identity@2.0.2':
     resolution: {integrity: sha512-amr/EQceqVtBVmjBK4uUF7nKKYuRttadigpvOcAn4dnO6SNSwSjQi8KDH9LnukEotPsSP4UDsQvNfHWEoUcslw==}
     peerDependencies:
       '@atcute/lexicons': ^2.0.0
 
-  '@atcute/lexicons@1.1.1':
-    resolution: {integrity: sha512-k6qy5p3j9fJJ6ekaMPfEfp3ni4TW/XNuH9ZmsuwC0fi0tOjp+Fa8ZQakHwnqOzFt/cVBfGcmYE/lKNAbeTjgUg==}
-
   '@atcute/lexicons@2.1.1':
     resolution: {integrity: sha512-kHyqUW8g/Fq9LTctGh0TVBx0AmtecV6VSrRprrSbqKqHe9q8C6y+YPL3EMNq2l93XA1iDHkkvYwLdTcKL/lNbA==}
 
-  '@atcute/multibase@1.1.5':
-    resolution: {integrity: sha512-vbmEFxgpntMuRqVZOCBgf6bgq69UGrlznQCZirVSit/mlcgyFVkSGbSEfkRnpIcrM8SnaySwuKbVvL+EPLh2dw==}
-
   '@atcute/multibase@1.2.5':
     resolution: {integrity: sha512-cReTONgYpQo/VHD3ZmzPNoyBKJgSk1J4h//cvvdVVJBMar+SjlQ/sUXeTjQfuyfmDKv+TLKhmutLcvbMcQ9Rvw==}
-
-  '@atcute/oauth-browser-client@1.0.26':
-    resolution: {integrity: sha512-z8VUmwRO1sFu5Dq1qYQOQLenkTSNaOyzlUZhVwFR41ru+AP84MS5UHHW/NsdC1xJAq1v6mlLySJ+pjxdDW8IYA==}
 
   '@atcute/oauth-crypto@1.0.1':
     resolution: {integrity: sha512-ghC8ceFx0r6pi5X3dNoET1K6PNg8afeAOZLD4PKLhrpVYdRtRrgY4uqAe3ojtSIjoS6GXmVm063CoJ2xtg/MoQ==}
@@ -227,9 +191,6 @@ packages:
 
   '@atcute/oauth-types@1.0.1':
     resolution: {integrity: sha512-9uFP/nK0PgPDsaNbLArzrCHvTZO1k04cSEX5jZ75W2Jh7Jxbh/CSTenSrad3CZXuX6y6hDquEtl6H/IqLtTmHw==}
-
-  '@atcute/uint8array@1.0.4':
-    resolution: {integrity: sha512-9jASMDghzhhDwjF3+eW+ZIauvytnUWDPfUVGUValRwnf9AZ7Yqqkc76tC89HVzVDAlJdhwQIUG2dQBsiVqumUA==}
 
   '@atcute/uint8array@1.2.0':
     resolution: {integrity: sha512-KoBGTbV4lS8zXNu91osM3FecrH3NUnxNPsBAkaNtn6uf/p240245qoLn7keFpRM0npX522X8R+XBBb2rvtE7Rg==}
@@ -409,10 +370,6 @@ packages:
   '@babel/types@7.28.4':
     resolution: {integrity: sha512-bkFqkLhh3pMBUQQkpVgWDWq/lqzc2678eUyDlTBhRqhCHFguYYGM0Efga7tYk4TogG/3x0EEl66/OQ+WGbWB/Q==}
     engines: {node: '>=6.9.0'}
-
-  '@badrap/valita@0.4.6':
-    resolution: {integrity: sha512-4kdqcjyxo/8RQ8ayjms47HCWZIF5981oE5nIenbfThKDxWXtEHKipAOWlflpPJzZx9y/JWYQkp18Awr7VuepFg==}
-    engines: {node: '>= 18'}
 
   '@bsky/jetstream@1.0.0':
     resolution: {integrity: sha512-YtQYhG6NEo7GevmVhRAUp8koyjoj+zf7u+Mo5/Of8xmHFVGLhHyQ57jck8JTPjizFW59G3fqM1fifMCuHFzL0w==}
@@ -1615,11 +1572,6 @@ packages:
     engines: {node: ^18 || >=20}
     hasBin: true
 
-  nanoid@5.1.6:
-    resolution: {integrity: sha512-c7+7RQ+dMB5dPwwCp4ee1/iV/q2P6aK1mTZcfr1BTuVlyW9hJYiMPybJCcnBlQtuSmTIWNeazm/zqNoZSSElBg==}
-    engines: {node: ^18 || >=20}
-    hasBin: true
-
   negotiator@0.6.3:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
@@ -2344,20 +2296,6 @@ snapshots:
 
   '@antfu/utils@8.1.1': {}
 
-  '@atcute/atproto@3.1.4':
-    dependencies:
-      '@atcute/lexicons': 1.1.1
-
-  '@atcute/bluesky@3.2.3':
-    dependencies:
-      '@atcute/atproto': 3.1.4
-      '@atcute/lexicons': 1.1.1
-
-  '@atcute/client@4.0.3':
-    dependencies:
-      '@atcute/identity': 1.1.0
-      '@atcute/lexicons': 1.1.1
-
   '@atcute/client@5.1.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
     dependencies:
       '@atcute/identity': 2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)
@@ -2380,21 +2318,12 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@atcute/identity@1.1.0':
-    dependencies:
-      '@atcute/lexicons': 1.1.1
-      '@badrap/valita': 0.4.6
-
   '@atcute/identity@2.0.2(@atcute/lexicons@2.1.1)(typescript@5.9.3)':
     dependencies:
       '@atcute/lexicons': 2.1.1
       valibot: 1.5.0(typescript@5.9.3)
     transitivePeerDependencies:
       - typescript
-
-  '@atcute/lexicons@1.1.1':
-    dependencies:
-      esm-env: 1.2.2
 
   '@atcute/lexicons@2.1.1':
     dependencies:
@@ -2404,22 +2333,9 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       esm-env: 1.2.2
 
-  '@atcute/multibase@1.1.5':
-    dependencies:
-      '@atcute/uint8array': 1.0.4
-
   '@atcute/multibase@1.2.5':
     dependencies:
       '@atcute/uint8array': 1.2.0
-
-  '@atcute/oauth-browser-client@1.0.26':
-    dependencies:
-      '@atcute/client': 4.0.3
-      '@atcute/identity': 1.1.0
-      '@atcute/lexicons': 1.1.1
-      '@atcute/multibase': 1.1.5
-      '@atcute/uint8array': 1.0.4
-      nanoid: 5.1.6
 
   '@atcute/oauth-crypto@1.0.1(typescript@5.9.3)':
     dependencies:
@@ -2459,8 +2375,6 @@ snapshots:
       valibot: 1.5.0(typescript@5.9.3)
     transitivePeerDependencies:
       - typescript
-
-  '@atcute/uint8array@1.0.4': {}
 
   '@atcute/uint8array@1.2.0': {}
 
@@ -2733,8 +2647,6 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
-
-  '@badrap/valita@0.4.6': {}
 
   '@bsky/jetstream@1.0.0(@atproto/lex@0.3.14)':
     dependencies:
@@ -3793,8 +3705,6 @@ snapshots:
   nanoid@3.3.11: {}
 
   nanoid@5.1.16: {}
-
-  nanoid@5.1.6: {}
 
   negotiator@0.6.3: {}
 

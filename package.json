@@ -18,7 +18,7 @@
     "format": "pnpm --filter frontend format && pnpm --filter backend format",
     "format:check": "pnpm --filter frontend format:check && pnpm --filter backend format:check",
     "test": "pnpm --filter backend test",
-    "typecheck": "pnpm --filter backend typecheck"
+    "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

@@ -1,57 +1,46 @@
 /**
  * Spooktober Tracker Component
- * Backend-based monitoring - Jetstream runs 24/7 on server
+ * The backend tracks the whole network 24/7; this view shows the results.
  */
 
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import toast from "solid-toast";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { ProfileChange } from "../../shared/types";
 import {
-  disableMonitoring,
-  enableMonitoring,
   getChangeHistory,
   getGlobalChanges,
-  getMonitoredChanges,
-  hasMonitoredFollows,
-  resolveHandle,
+  getMyChanges,
+  purgeMyData,
 } from "./api";
 import { formatGermanDateTime } from "./utils/date-formatter";
 import { showError, showSuccess } from "./utils/toast-helpers";
 
 /**
- * Props required to render the tracker for a given admin/user context.
+ * Props required to render the tracker for the signed-in user.
  *
- * @property {string} userDID DID of the currently authenticated user driving the tracker.
- * @property {{ did: string; handle: string }[]} follows Set of follows to monitor, including resolved handles.
+ * @property {{ did: string; handle: string }[]} follows Accounts the user follows, with handles.
  * @property {() => Promise<void> | void} [onLogout] Optional logout routine provided by parent (App) to terminate session.
  */
 interface Props {
-  userDID: string;
   follows: { did: string; handle: string }[];
   onLogout?: () => Promise<void> | void;
 }
 
 /**
- * Render the tracker interface and expose actions to enable/disable monitoring.
+ * Render the tracker interface: known changes and changes among the user's follows.
  *
- * @param props.userDID DID of the logged-in user.
- * @param props.follows List of follow records to monitor.
+ * @param props.follows List of follow records of the signed-in user.
  * @returns JSX Fragment for the tracker.
  */
 export const SpooktoberTracker = (props: Props) => {
+  // True while the "changes of my follows" view is shown
   const [monitoringEnabled, setMonitoringEnabled] = createSignal(false);
-  const [hasEnabledMonitoring, setHasEnabledMonitoring] = createSignal(false);
-  const [isCheckingMonitoring, setIsCheckingMonitoring] = createSignal(true);
   const [changes, setChanges] = createSignal<ProfileChange[]>([]);
   const [knownChangesLoaded, setKnownChangesLoaded] = createSignal(false);
-  const [isEnabling, setIsEnabling] = createSignal(false);
   const [isLoadingChanges, setIsLoadingChanges] = createSignal(false);
   const [expandedDID, setExpandedDID] = createSignal<string | null>(null);
   const [history, setHistory] = createSignal<Map<string, ProfileChange[]>>(
     new Map(),
   );
-  const [showStopConfirmation, setShowStopConfirmation] = createSignal(false);
-  const [isStopping, setIsStopping] = createSignal(false);
 
   // Controls "Delete all my data" confirmation UI
   const [showDeleteConfirmation, setShowDeleteConfirmation] =
@@ -71,121 +60,14 @@ export const SpooktoberTracker = (props: Props) => {
   let refreshInterval: number | null = null;
   let countdownInterval: number | null = null;
 
-  /**
-   * Enable backend monitoring, optionally refreshing handles beforehand.
-   *
-   * @returns Promise that resolves once monitoring is activated or fails.
-   */
-  const startMonitoring = async () => {
-    setIsEnabling(true);
-
-    // Check for handle changes first
-    try {
-      let handleChangesCount = 0;
-      const handleUpdates = new Map<string, string>();
-
-      // Resolve current handles for all follows in parallel
-      const handleCheckPromises = props.follows.map(async (follow) => {
-        try {
-          // Lookup latest handle for this DID
-          const currentHandle = await resolveHandle(follow.did);
-          // Record handle changes for downstream update notification
-          if (currentHandle && currentHandle !== follow.handle) {
-            handleChangesCount++;
-            handleUpdates.set(follow.did, currentHandle);
-          }
-        } catch (error) {
-          // Log and continue when a single handle resolution fails
-          console.error(`Failed to resolve handle for ${follow.did}:`, error);
-        }
-      });
-
-      // Wait for all handle checks to complete before proceeding
-      await Promise.all(handleCheckPromises);
-
-      // Create new follows array with updated handles (immutable pattern)
-      const updatedFollows = props.follows.map((follow) => {
-        const newHandle = handleUpdates.get(follow.did);
-        return newHandle ? { ...follow, handle: newHandle } : follow;
-      });
-
-      // Notify the user when any handles were updated
-      if (handleChangesCount > 0) {
-        showSuccess(
-          `Updated ${handleChangesCount} username${handleChangesCount > 1 ? "s" : ""} in your follows`,
-          { duration: 3000 },
-        );
-      }
-
-      // Enable monitoring on backend with updated follows
-      const result = await enableMonitoring(props.userDID, updatedFollows);
-
-      // Mark monitoring enabled
-      setMonitoringEnabled(true);
-
-      // Mark that monitoring was enabled at least once
-      setHasEnabledMonitoring(true);
-
-      // Check if queued
-      if (result.temporaryStream?.queued || result.queued) {
-        const position = result.temporaryStream?.position || result.position;
-        showSuccess(
-          `Monitoring enabled! You're in queue (position ${position}). 24h history will load when a slot is available.`,
-          { duration: 6000 },
-        );
-
-        // Backfill started: inform user about expected duration
-      } else if (result.backfillTriggered) {
-        showSuccess(
-          `Monitoring enabled! Loading 24h history... This takes ~10 minutes.`,
-          { duration: 4000 },
-        );
-
-        // Skip backfill: recent backfill already loaded
-      } else if (result.backfillSkipReason === "recent_backfill") {
-        showSuccess("Monitoring enabled! Recent changes already loaded.", {
-          duration: 4000,
-        });
-
-        // Skip backfill: main stream catching up; new changes will flow in
-      } else if (result.backfillSkipReason === "main_stream_catching_up") {
-        showSuccess(
-          "Monitoring enabled! New changes will appear automatically.",
-          { duration: 4000 },
-        );
-
-        // Default success when no backfill or skip reason applies
-      } else {
-        showSuccess("Monitoring enabled!", { duration: 3000 });
-      }
-
-      // Load existing changes
-      await loadChanges();
-
-      // Start auto-refresh
-      startAutoRefresh();
-    } catch (err) {
-      showError(
-        err instanceof Error
-          ? err.message
-          : "Could not start monitoring. Please try again.",
-        { duration: 5000 },
-      );
-    } finally {
-      setIsEnabling(false);
-    }
-  };
-
   // Delete all user data (stop monitoring, purge DB rows)
   const requestDeleteAllData = () => setShowDeleteConfirmation(true);
   const cancelDeleteAllData = () => setShowDeleteConfirmation(false);
   const confirmDeleteAllData = async () => {
     setIsDeleting(true);
     try {
-      const { purgeMyData } = await import("./api");
-      const result = await purgeMyData(props.userDID);
+      const result = await purgeMyData();
       setMonitoringEnabled(false);
-      setHasEnabledMonitoring(false);
       setChanges([]);
       setKnownChangesLoaded(false);
       showSuccess(
@@ -247,7 +129,7 @@ export const SpooktoberTracker = (props: Props) => {
 
     // Group by DID and keep only latest change with old values
     try {
-      const globalChanges = await getGlobalChanges(props.userDID);
+      const globalChanges = await getGlobalChanges();
       const deduplicated = deduplicateChanges(globalChanges);
 
       // Commit the deduplicated change set into local state.
@@ -282,7 +164,7 @@ export const SpooktoberTracker = (props: Props) => {
 
     // Watch for changes
     try {
-      const monitoredChanges = await getMonitoredChanges(props.userDID);
+      const monitoredChanges = await getMyChanges();
 
       // Server is connected
       setServerDisconnected(false);
@@ -297,10 +179,7 @@ export const SpooktoberTracker = (props: Props) => {
       const currentlyExpanded = expandedDID();
       if (currentlyExpanded) {
         try {
-          const changeHistory = await getChangeHistory(
-            currentlyExpanded,
-            props.userDID,
-          );
+          const changeHistory = await getChangeHistory(currentlyExpanded);
           // Keep only the refreshed history for the expanded DID
           const newMap = new Map();
           newMap.set(currentlyExpanded, changeHistory);
@@ -350,7 +229,7 @@ export const SpooktoberTracker = (props: Props) => {
       // Fetch history if not already loaded
       if (!history().has(did)) {
         try {
-          const changeHistory = await getChangeHistory(did, props.userDID);
+          const changeHistory = await getChangeHistory(did);
           setHistory((prev) => {
             const newMap = new Map(prev);
             newMap.set(did, changeHistory);
@@ -443,75 +322,6 @@ export const SpooktoberTracker = (props: Props) => {
     setMonitoringEnabled(true); // Then switch UI
     startAutoRefresh(); // Start auto-refresh when viewing changes
   };
-
-  /**
-   * Prompt the user to confirm disabling monitoring.
-   *
-   * @returns void
-   */
-  const requestStopMonitoring = () => {
-    setShowStopConfirmation(true);
-  };
-
-  /**
-   * Persist monitoring disable request and reset local state.
-   *
-   * @returns Promise resolving once monitoring has been disabled.
-   */
-  const confirmStopMonitoring = async () => {
-    setIsStopping(true);
-
-    // Stop monitoring
-    try {
-      await disableMonitoring(props.userDID);
-
-      // Stop auto-refresh
-      stopAutoRefresh();
-
-      // Reset states & error handling
-      setMonitoringEnabled(false);
-      setHasEnabledMonitoring(false);
-      setChanges([]);
-      setHistory(new Map());
-      setExpandedDID(null);
-      setShowStopConfirmation(false);
-      toast.success("Monitoring stopped. You can re-enable it anytime.", {
-        duration: 4000,
-      });
-    } catch (err) {
-      showError(
-        err instanceof Error
-          ? err.message
-          : "Could not stop monitoring. Please try again.",
-        { duration: 5000 },
-      );
-    } finally {
-      setIsStopping(false);
-    }
-  };
-
-  /**
-   * Abort the monitoring stop confirmation dialog.
-   *
-   * @returns void
-   */
-  const cancelStopMonitoring = () => {
-    setShowStopConfirmation(false);
-  };
-
-  // Check if user already has monitoring enabled on mount
-  onMount(async () => {
-    try {
-      const isMonitoring = await hasMonitoredFollows(props.userDID);
-      if (isMonitoring) {
-        setHasEnabledMonitoring(true);
-      }
-    } catch (error) {
-      console.error("Failed to check monitoring status:", error);
-    } finally {
-      setIsCheckingMonitoring(false);
-    }
-  });
 
   // Cleanup intervals on component unmount
   onCleanup(() => {
@@ -701,35 +511,16 @@ export const SpooktoberTracker = (props: Props) => {
       {/* Initial State - Enable Monitoring or View Changes Button */}
       <Show when={!monitoringEnabled() && !knownChangesLoaded()}>
         <div class="mb-4">
-          <Show when={!isCheckingMonitoring() && !hasEnabledMonitoring()}>
-            <div class="mb-4 w-full rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-              <h4 class="mb-2 font-bold text-blue-800 dark:text-blue-300">
-                ℹ️ Enable Monitoring
-              </h4>
-              <p>
-                Enable 24/7 backend monitoring to track profile changes
-                (displayName, avatar, handle) for your follows. The backend
-                watches continuously for events and you can check for spooky
-                updates.
-              </p>
-            </div>
-          </Show>
           <button
-            onclick={hasEnabledMonitoring() ? viewChanges : startMonitoring}
-            disabled={
-              props.follows.length === 0 || isEnabling() || isLoadingChanges()
-            }
+            onclick={viewChanges}
+            disabled={props.follows.length === 0 || isLoadingChanges()}
             class="w-full rounded bg-orange-600 px-4 py-3 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isEnabling()
-              ? "Enabling Monitoring..."
-              : isLoadingChanges()
-                ? "Loading Changes..."
-                : props.follows.length === 0
-                  ? "No Follows to Monitor"
-                  : hasEnabledMonitoring()
-                    ? "🟢 Monitoring Active - View Changes"
-                    : `Enable Monitoring for ${props.follows.length} Follows`}
+            {isLoadingChanges()
+              ? "Loading Changes..."
+              : props.follows.length === 0
+                ? "You don't follow anyone yet"
+                : `🎃 View Changes of Your ${props.follows.length} Follows`}
           </button>
 
           {/* Delete confirmation shown directly above the delete button */}
@@ -739,9 +530,8 @@ export const SpooktoberTracker = (props: Props) => {
                 ⚠️ Delete all your data?
               </h3>
               <p class="mb-4 text-sm text-red-700 dark:text-red-400">
-                This stops monitoring and removes your data (including your own
-                profile change history) from the community database. This action
-                cannot be undone.
+                This removes your own profile change history from the community
+                database and logs you out. This action cannot be undone.
               </p>
               <div class="flex flex-col gap-2 sm:flex-row">
                 <button
@@ -762,50 +552,18 @@ export const SpooktoberTracker = (props: Props) => {
             </div>
           </Show>
 
-          {/* Show purge button directly under the CTA when monitoring was previously enabled */}
-          <Show when={hasEnabledMonitoring()}>
-            <button
-              onclick={requestDeleteAllData}
-              class="mt-4 w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
-            >
-              Delete all my data
-            </button>
-          </Show>
-        </div>
-      </Show>
-
-      {/* Stop Monitoring Confirmation Dialog */}
-      <Show when={showStopConfirmation()}>
-        <div class="mb-4 rounded-lg border border-yellow-400 bg-yellow-50 p-4 dark:border-yellow-600 dark:bg-yellow-900/20">
-          <h3 class="mb-2 font-bold text-yellow-800 dark:text-yellow-300">
-            ⚠️ Stop Monitoring?
-          </h3>
-          <p class="mb-4 text-sm text-yellow-700 dark:text-yellow-400">
-            This will stop tracking changes for your follows. Known changes will
-            remain in the database for all users. You can re-enable monitoring
-            anytime.
-          </p>
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <button
-              onclick={confirmStopMonitoring}
-              disabled={isStopping()}
-              class="flex-1 rounded bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {isStopping() ? "Stopping..." : "Yes, Stop Monitoring"}
-            </button>
-            <button
-              onclick={cancelStopMonitoring}
-              disabled={isStopping()}
-              class="flex-1 rounded bg-gray-600 px-4 py-2 font-bold text-white hover:bg-gray-700 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
+          {/* Purge button directly under the CTA */}
+          <button
+            onclick={requestDeleteAllData}
+            class="mt-4 w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
+          >
+            Delete all my data
+          </button>
         </div>
       </Show>
 
       {/* Monitoring Enabled - Show Changes */}
-      <Show when={monitoringEnabled() && !showStopConfirmation()}>
+      <Show when={monitoringEnabled()}>
         <div class="mb-4">
           {/* Auto-Refresh Timer */}
           <Show when={autoRefreshActive()}>
@@ -817,18 +575,10 @@ export const SpooktoberTracker = (props: Props) => {
           </Show>
 
           {/* Action Buttons */}
-          <div class="mb-4 flex flex-col gap-2 sm:flex-row">
-            <button
-              onclick={requestStopMonitoring}
-              class="flex-1 rounded bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700"
-            >
-              Stop Monitoring
-            </button>
-
-            {/* No purge button in active (view changes) state by request */}
+          <div class="mb-4">
             <button
               onclick={reset}
-              class="rounded bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700"
+              class="w-full rounded bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700"
             >
               Back
             </button>
@@ -848,8 +598,8 @@ export const SpooktoberTracker = (props: Props) => {
                   }
                 >
                   <p class="text-gray-600 dark:text-gray-400">
-                    No changes detected yet. Backend is monitoring 24/7. Check
-                    back later!
+                    No changes among your follows yet. The whole network is
+                    tracked 24/7 - check back later!
                   </p>
                 </Show>
               </div>
