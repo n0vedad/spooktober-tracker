@@ -62,11 +62,12 @@ describe("avatar archive", () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response("<html>"))
-      .mockRejectedValueOnce(new Error("timeout"));
+      .mockRejectedValue(new Error("timeout"));
     const archive = createAvatarArchive({
       has: hasThumb,
       save: saveThumb,
       fetch,
+      retryDelayMs: 10,
     });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -74,6 +75,48 @@ describe("avatar archive", () => {
     await archive.idle();
 
     expect(await hasThumb(ALICE, OLD)).toBe(false);
+    expect(await hasThumb(ALICE, NEW)).toBe(false);
+  });
+
+  it("tries once more after a timeout or server error", async () => {
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("The operation was aborted due to timeout"),
+      )
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+      // A fresh response per call: a body can only be read once
+      .mockImplementation(async () => image([7]));
+    const archive = createAvatarArchive({
+      has: hasThumb,
+      save: saveThumb,
+      fetch,
+      retryDelayMs: 10,
+    });
+
+    archive.onChange({ did: ALICE, old_avatar: OLD, new_avatar: NEW });
+    await archive.idle();
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(await hasThumb(ALICE, OLD)).toBe(true);
+    expect(await hasThumb(ALICE, NEW)).toBe(true);
+  });
+
+  it("gives up after the second failure", async () => {
+    const fetch = vi.fn(async () => new Response("busy", { status: 502 }));
+    const archive = createAvatarArchive({
+      has: hasThumb,
+      save: saveThumb,
+      fetch: fetch as typeof globalThis.fetch,
+      retryDelayMs: 10,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    archive.onChange({ did: ALICE, old_avatar: null, new_avatar: NEW });
+    await archive.idle();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledOnce();
     expect(await hasThumb(ALICE, NEW)).toBe(false);
   });
 

@@ -20,12 +20,19 @@ const FETCH_TIMEOUT_MS = 10_000;
 const CONCURRENCY = 4;
 // Drop work instead of growing without bound if the CDN is slow
 const MAX_QUEUE = 1000;
+// One more try after a timeout or server error: a CDN cache miss has to
+// fetch and resize the original first, which is sometimes slow
+const RETRY_DELAY_MS = 60_000;
 
 interface Deps {
   has: (did: string, cid: string) => Promise<boolean>;
   save: (did: string, cid: string, thumb: AvatarThumb) => Promise<void>;
   fetch?: typeof fetch;
+  retryDelayMs?: number;
 }
+
+// Worth another try later (as opposed to "gone" or "not an image")
+class TransientError extends Error {}
 
 interface AvatarChange {
   did: string;
@@ -35,16 +42,30 @@ interface AvatarChange {
 
 export function createAvatarArchive(deps: Deps) {
   const doFetch = deps.fetch ?? fetch;
-  const queue: Array<{ did: string; cid: string }> = [];
+  const retryDelayMs = deps.retryDelayMs ?? RETRY_DELAY_MS;
+  const queue: Array<{ did: string; cid: string; retried: boolean }> = [];
   const pending = new Set<string>();
   let active = 0;
+  // Retries waiting for their timer
+  let scheduled = 0;
   let idleWaiters: Array<() => void> = [];
 
   const download = async (did: string, cid: string) => {
     if (await deps.has(did, cid)) return;
-    const response = await doFetch(thumbnailUrl(did, cid), {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    let response: Response;
+    try {
+      response = await doFetch(thumbnailUrl(did, cid), {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch (error) {
+      // Timeout or network error
+      throw new TransientError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (response.status >= 500) {
+      throw new TransientError(`CDN answered ${response.status}`);
+    }
     // Gone from the PDS and the CDN cache: nothing to archive
     if (!response.ok) return;
     const contentType = response.headers.get("content-type") ?? "";
@@ -56,10 +77,22 @@ export function createAvatarArchive(deps: Deps) {
 
   const pump = () => {
     while (active < CONCURRENCY && queue.length > 0) {
-      const { did, cid } = queue.shift()!;
+      const item = queue.shift()!;
+      const { did, cid } = item;
       active++;
+      let retrying = false;
       download(did, cid)
         .catch((error) => {
+          if (error instanceof TransientError && !item.retried) {
+            retrying = true;
+            scheduled++;
+            setTimeout(() => {
+              scheduled--;
+              queue.push({ ...item, retried: true });
+              pump();
+            }, retryDelayMs).unref();
+            return;
+          }
           console.warn(
             `⚠️  Could not archive avatar ${cid} of ${did}:`,
             error instanceof Error ? error.message : error,
@@ -67,11 +100,11 @@ export function createAvatarArchive(deps: Deps) {
         })
         .finally(() => {
           active--;
-          pending.delete(`${did}/${cid}`);
+          if (!retrying) pending.delete(`${did}/${cid}`);
           pump();
         });
     }
-    if (active === 0 && queue.length === 0) {
+    if (active === 0 && queue.length === 0 && scheduled === 0) {
       const waiters = idleWaiters;
       idleWaiters = [];
       waiters.forEach((resolve) => resolve());
@@ -83,7 +116,7 @@ export function createAvatarArchive(deps: Deps) {
     const key = `${did}/${cid}`;
     if (pending.has(key) || queue.length >= MAX_QUEUE) return;
     pending.add(key);
-    queue.push({ did, cid });
+    queue.push({ did, cid, retried: false });
   };
 
   return {
@@ -99,10 +132,12 @@ export function createAvatarArchive(deps: Deps) {
     },
 
     /**
-     * Resolves once all queued downloads are done (tests, shutdown).
+     * Resolves once all queued downloads and retries are done (tests).
      */
     idle(): Promise<void> {
-      if (active === 0 && queue.length === 0) return Promise.resolve();
+      if (active === 0 && queue.length === 0 && scheduled === 0) {
+        return Promise.resolve();
+      }
       return new Promise((resolve) => idleWaiters.push(resolve));
     },
   };
