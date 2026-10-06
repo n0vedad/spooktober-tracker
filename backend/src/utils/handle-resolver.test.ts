@@ -29,8 +29,11 @@ describe("findPreviousHandle", () => {
     );
 
     expect(prev).toBe("alice.test");
+    // Short timeout: ingestion waits for these lookups
     expect(fetchFn).toHaveBeenCalledWith(
       "https://plc.directory/did:plc:alice/log/audit",
+      undefined,
+      3000,
     );
   });
 
@@ -99,7 +102,11 @@ describe("fetchCurrentHandle", () => {
     );
 
     expect(await fetchCurrentHandle(DID, fetchFn)).toBe("alice.test");
-    expect(fetchFn).toHaveBeenCalledWith("https://plc.directory/did:plc:alice");
+    expect(fetchFn).toHaveBeenCalledWith(
+      "https://plc.directory/did:plc:alice",
+      undefined,
+      3000,
+    );
   });
 
   it("reads did:web documents from the well-known path", async () => {
@@ -110,8 +117,11 @@ describe("fetchCurrentHandle", () => {
     expect(await fetchCurrentHandle("did:web:example.com", fetchFn)).toBe(
       "example.com",
     );
+    // Short timeout: ingestion waits for these lookups
     expect(fetchFn).toHaveBeenCalledWith(
       "https://example.com/.well-known/did.json",
+      undefined,
+      3000,
     );
   });
 

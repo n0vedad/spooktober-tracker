@@ -121,7 +121,7 @@ function makeIngester(
     },
     cursorSaveIntervalMs: 0,
     retryDelayMs: () => 0,
-    log: { log: () => {}, error: () => {} },
+    log: { log: () => {}, warn: () => {}, error: () => {} },
   });
   return { ingester, saved };
 }

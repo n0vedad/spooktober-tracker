@@ -42,6 +42,10 @@ function handleOf(entry: PLCAuditLogEntry): string | null {
   return entry.operation.handle ?? null;
 }
 
+// PLC answers in well under a second; ingestion waits for these lookups, so
+// a hanging request must not hold it up for long
+const PLC_TIMEOUT_MS = 3000;
+
 /**
  * Find the handle a did:plc account used right before switching to
  * `newHandle`, based on the PLC audit log.
@@ -65,7 +69,11 @@ export async function findPreviousHandle(
   if (!did.startsWith("did:plc:")) return null;
 
   try {
-    const response = await fetchFn(`https://plc.directory/${did}/log/audit`);
+    const response = await fetchFn(
+      `https://plc.directory/${did}/log/audit`,
+      undefined,
+      PLC_TIMEOUT_MS,
+    );
     if (!response.ok) return null;
     const log = ((await response.json()) as PLCAuditLogEntry[]).filter(
       (entry) => !entry.nullified,
@@ -86,7 +94,9 @@ export async function findPreviousHandle(
     }
     return handleOf(log[i - 1]);
   } catch (error) {
-    console.warn(`Failed to get audit log for ${did}:`, error);
+    console.warn(
+      `⚠️  Could not read the PLC audit log of ${did}: ${error instanceof Error ? error.message : error}`,
+    );
     return null;
   }
 }
@@ -106,7 +116,7 @@ export async function fetchCurrentHandle(
   const url = did.startsWith("did:web:")
     ? `https://${did.slice("did:web:".length)}/.well-known/did.json`
     : `https://plc.directory/${did}`;
-  const response = await fetchFn(url);
+  const response = await fetchFn(url, undefined, PLC_TIMEOUT_MS);
   if (!response.ok) return null;
 
   const doc = (await response.json()) as { alsoKnownAs?: string[] };

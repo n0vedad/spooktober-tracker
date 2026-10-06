@@ -38,7 +38,7 @@ export interface IngesterDeps {
   cursorSaveIntervalMs?: number;
   // Delay before restarting after a failure (default: 1s, 2s, 4s ... max 60s)
   retryDelayMs?: (attempt: number) => number;
-  log?: Pick<Console, "log" | "error">;
+  log?: Pick<Console, "log" | "warn" | "error">;
 }
 
 export interface IngesterStatus {
@@ -68,7 +68,7 @@ export class Ingester {
   private eventsProcessed = 0;
   private changesDetected = 0;
   private consecutiveFailures = 0;
-  private readonly log: Pick<Console, "log" | "error">;
+  private readonly log: Pick<Console, "log" | "warn" | "error">;
 
   constructor(private readonly deps: IngesterDeps) {
     this.log = deps.log ?? console;
@@ -193,7 +193,9 @@ export class Ingester {
     try {
       return await this.deps.resolveHandle(did);
     } catch (error) {
-      this.log.error(`⚠️  Could not resolve handle for ${did}:`, error);
+      this.log.warn(
+        `⚠️  Could not resolve handle for ${did}: ${error instanceof Error ? error.message : error}`,
+      );
       return null;
     }
   }
