@@ -2,40 +2,29 @@
  * Closeness tiers of the per-user change view.
  */
 
+import { t, type MessageKey } from "../i18n";
+
 export type Tier = "follows" | "inner" | "bubble" | "edge";
 
-// Display order (closest first) with labels shown in the scope selector
-export const TIER_OPTIONS: ReadonlyArray<{
-  tier: Tier;
-  emoji: string;
-  label: string;
-  hint: string;
-}> = [
-  {
-    tier: "follows",
-    emoji: "🎃",
-    label: "Follows",
-    hint: "Accounts you follow",
-  },
-  {
-    tier: "inner",
-    emoji: "🕯️",
-    label: "Inner circle",
-    hint: "Followed by many of your follows",
-  },
-  {
-    tier: "bubble",
-    emoji: "👻",
-    label: "Bubble",
-    hint: "Followed by 3 or more of your follows",
-  },
-  {
-    tier: "edge",
-    emoji: "🕸️",
-    label: "Edge",
-    hint: "Followed by at least one of your follows",
-  },
+// Display order (closest first) with the emoji shown in badges and buttons
+export const TIER_OPTIONS: ReadonlyArray<{ tier: Tier; emoji: string }> = [
+  { tier: "follows", emoji: "🎃" },
+  { tier: "inner", emoji: "🕯️" },
+  { tier: "bubble", emoji: "👻" },
+  { tier: "edge", emoji: "🕸️" },
 ];
+
+/**
+ * Translated name of a tier.
+ */
+export const tierLabel = (tier: Tier): string =>
+  t(`tier.${tier}` as MessageKey);
+
+/**
+ * Translated one-line explanation of a tier.
+ */
+export const tierHint = (tier: Tier): string =>
+  t(`tier.${tier}.hint` as MessageKey);
 
 /**
  * Emoji for a tier badge.

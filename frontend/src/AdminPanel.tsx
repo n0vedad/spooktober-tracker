@@ -26,7 +26,7 @@ import {
   type AdminStats,
   type IngestionHealth,
 } from "./api";
-import { formatGermanDateTime } from "./utils/date-formatter";
+import { formatDateTime } from "./utils/date-formatter";
 import { ENV } from "./utils/env";
 import { describeState, formatDuration } from "./utils/ingestion";
 import { showError, showSuccess } from "./utils/toast-helpers";
@@ -192,7 +192,7 @@ export const AdminPanel = () => {
   // Cursor (unix microseconds) as a readable date, if it is one
   const cursorDate = (value: string) => {
     const n = Number(value);
-    return n >= 1e15 ? formatGermanDateTime(n / 1000, "short", "medium") : "-";
+    return n >= 1e15 ? formatDateTime(n / 1000, "short", "medium") : "-";
   };
 
   return (
@@ -260,7 +260,7 @@ export const AdminPanel = () => {
                   <AccountName did={bot.did} handle={bot.handle} />
                   <div class="text-xs text-gray-500 dark:text-gray-400">
                     {REASON_TEXT[bot.reason] ?? bot.reason} ·{" "}
-                    {formatGermanDateTime(bot.flagged_at, "short", "short")}
+                    {formatDateTime(bot.flagged_at, "short", "short")}
                   </div>
                 </div>
                 <button
@@ -283,7 +283,7 @@ export const AdminPanel = () => {
                 <AccountName did={optIn.did} handle={optIn.handle} />
                 <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">
                   {optIn.via} ·{" "}
-                  {formatGermanDateTime(optIn.opted_in_at, "short", "short")}
+                  {formatDateTime(optIn.opted_in_at, "short", "short")}
                 </span>
               </div>
             )}
@@ -314,8 +314,7 @@ export const AdminPanel = () => {
                 <div class="min-w-0">
                   <AccountName did={user.did} handle={user.handle} />
                   <div class="text-xs text-gray-500 dark:text-gray-400">
-                    since{" "}
-                    {formatGermanDateTime(user.added_at, "short", "short")}
+                    since {formatDateTime(user.added_at, "short", "short")}
                   </div>
                 </div>
                 <button
@@ -427,11 +426,7 @@ const StatusCard = (props: {
         {row(
           "Last event",
           props.ingestion.lastEventTime
-            ? formatGermanDateTime(
-                props.ingestion.lastEventTime,
-                "short",
-                "medium",
-              )
+            ? formatDateTime(props.ingestion.lastEventTime, "short", "medium")
             : "-",
         )}
         <Show when={props.stats.labeler.enabled}>

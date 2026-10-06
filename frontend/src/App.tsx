@@ -4,11 +4,12 @@
  */
 
 // Base
-import { createEffect, createSignal, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { Toaster } from "solid-toast";
 import { AdminPanel } from "./AdminPanel";
 import { getMe, getMyFollows, logout, startLogin, type Me } from "./api";
 import { HandleTypeahead } from "./HandleTypeahead";
+import { lang, setLang, t, type MessageKey } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
 import { SpooktoberTracker } from "./SpooktoberTracker";
 
@@ -18,20 +19,19 @@ type FollowResult = {
   handle: string;
 };
 
-// Transient UI notice with message text and severity tone
+// Transient UI notice (a message key, so it follows language switches)
 type Notice = {
-  message: string;
+  key: MessageKey;
   tone: "info" | "error";
 };
 
-// Messages for the error codes the backend appends after a failed login
-const LOGIN_ERRORS: Record<string, string> = {
-  resolve_failed:
-    "Could not find that account. Check the handle and try again.",
-  denied: "Login was cancelled.",
-  callback_failed: "Login failed. Please try again.",
-  session_failed: "Login failed on our side. Please try again.",
-};
+// Error codes the backend appends after a failed login
+const LOGIN_ERRORS = new Set([
+  "resolve_failed",
+  "denied",
+  "callback_failed",
+  "session_failed",
+]);
 
 /**
  * Encapsulates login state: session lookup, OAuth redirect and logout.
@@ -51,7 +51,9 @@ const Login = () => {
     if (loginError) {
       history.replaceState(null, "", "/");
       setNotice({
-        message: LOGIN_ERRORS[loginError] ?? "Login failed.",
+        key: LOGIN_ERRORS.has(loginError)
+          ? (`login.error.${loginError}` as MessageKey)
+          : "login.error.unknown",
         tone: "error",
       });
     }
@@ -59,10 +61,7 @@ const Login = () => {
     try {
       setMe(await getMe());
     } catch {
-      setNotice({
-        message: "Could not reach the server. Please try again later.",
-        tone: "error",
-      });
+      setNotice({ key: "login.serverDown", tone: "error" });
     } finally {
       setChecking(false);
     }
@@ -76,10 +75,10 @@ const Login = () => {
   const loginBsky = (login: string) => {
     const handle = login.trim();
     if (!handle) {
-      setNotice({ message: "Please enter your handle.", tone: "error" });
+      setNotice({ key: "login.enterHandle", tone: "error" });
       return;
     }
-    setNotice({ message: "Redirecting to Bluesky...", tone: "info" });
+    setNotice({ key: "login.redirecting", tone: "info" });
     startLogin(handle);
   };
 
@@ -92,10 +91,7 @@ const Login = () => {
     try {
       await logout();
     } catch {
-      setNotice({
-        message: "Logout failed on the server; you are logged out locally.",
-        tone: "info",
-      });
+      setNotice({ key: "login.logoutFailed", tone: "info" });
     } finally {
       setMe(null);
     }
@@ -194,7 +190,7 @@ const App = () => {
                 <div class="basis-1/3">
                   <div
                     class="flex w-fit cursor-pointer items-center"
-                    title="Theme"
+                    title={t("theme.title")}
                     onclick={() => {
                       setTheme(theme() === "light" ? "dark" : "light");
                       if (theme() === "dark")
@@ -213,7 +209,16 @@ const App = () => {
                 <div class="basis-1/3 text-center text-lg font-bold sm:text-xl">
                   🎃 Spooktober Tracker
                 </div>
-                <div class="flex basis-1/3 justify-end gap-x-2">
+                <div class="flex basis-1/3 items-center justify-end gap-x-2">
+                  {/* Language: shows the flag of the language to switch to */}
+                  <button
+                    class="cursor-pointer text-lg leading-none sm:text-xl"
+                    title={t("lang.switch")}
+                    aria-label={t("lang.switch")}
+                    onclick={() => setLang(lang() === "de" ? "en" : "de")}
+                  >
+                    {lang() === "de" ? "🇬🇧" : "🇩🇪"}
+                  </button>
                   <Show when={login.me()}>
                     <button
                       class="flex cursor-pointer items-center justify-center rounded px-2 py-1 text-slate-700 dark:text-slate-100"
@@ -235,7 +240,7 @@ const App = () => {
                     }}
                   >
                     <label for="handle" class="ml-0.5 text-sm">
-                      Handle
+                      {t("login.handle")}
                     </label>
                     <HandleTypeahead
                       value={login.loginInput()}
@@ -245,7 +250,7 @@ const App = () => {
                       type="submit"
                       class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
                     >
-                      Login
+                      {t("login.button")}
                     </button>
                   </form>
 
@@ -263,7 +268,7 @@ const App = () => {
 
                     return (
                       <div class={base + (isInfo ? info : error)}>
-                        {current.message}
+                        {t(current.key)}
                       </div>
                     );
                   })()}
@@ -271,67 +276,41 @@ const App = () => {
                   {/* Login Info Note */}
                   <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
                     <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
-                      ℹ️ How to Login
+                      {t("login.howTitle")}
                     </h4>
-                    <div class="space-y-2 text-xs text-blue-900 sm:text-sm dark:text-blue-200">
-                      <p>
-                        Enter your Bluesky handle and click "Login". You'll be
-                        redirected to your Bluesky server to confirm. Your
-                        password never touches this site, and we only ask for
-                        proof of who you are - no permission to post or change
-                        anything.
-                      </p>
-                    </div>
+                    <p class="text-xs text-blue-900 sm:text-sm dark:text-blue-200">
+                      {t("login.howText")}
+                    </p>
                   </div>
 
                   {/* FAQ */}
                   <div class="mx-4 mt-3 max-w-2xl rounded-lg border border-purple-300 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/30">
                     <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
-                      ❓ FAQ
+                      {t("faq.title")}
                     </h4>
                     <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
-                      <p>
-                        <strong>What is Spooktober Tracker?</strong>
-                        <br />A community tool that shows Bluesky profile
-                        changes during spooky season (October): new handles,
-                        display names and avatars - so you can see who's getting
-                        spooky! 🎃
-                      </p>
-                      <p>
-                        <strong>How does it work?</strong>
-                        <br />
-                        Our server watches public profile updates across the
-                        whole network in real time via Bluesky's Jetstream. You
-                        don't need to enable anything or keep this page open.
-                        After logging in you see the changes of the accounts you
-                        follow.
-                      </p>
-                      <p>
-                        <strong>What data is collected?</strong>
-                        <br />
-                        Only <em>publicly visible</em> profile data: handles,
-                        display names and avatar references. We never store
-                        passwords, private posts or OAuth tokens. Bots and
-                        brand-new accounts setting up their profile are filtered
-                        out.
-                      </p>
-                      <p>
-                        <strong>Can I remove my data?</strong>
-                        <br />
-                        Yes. After logging in, click "Delete all my data" to
-                        remove your own profile change history.
-                      </p>
+                      <For each={["what", "how", "data", "remove"] as const}>
+                        {(topic) => (
+                          <p>
+                            <strong>{t(`faq.${topic}Q`)}</strong>
+                            <br />
+                            {t(`faq.${topic}A`)}
+                          </p>
+                        )}
+                      </For>
                     </div>
                   </div>
                 </Show>
                 <Show when={login.me()?.handle}>
                   <div class="mb-4 text-center text-sm sm:text-base">
-                    Logged in as @{login.me()?.handle}
+                    {t("login.loggedInAs", {
+                      handle: login.me()?.handle ?? "",
+                    })}
                   </div>
                 </Show>
                 <Show when={login.checking()}>
                   <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
-                    Loading...
+                    {t("login.loading")}
                   </div>
                 </Show>
               </div>
@@ -347,7 +326,7 @@ const App = () => {
                   </Show>
 
                   <Show when={fetch.loading()}>
-                    <div class="m-3">Loading follows...</div>
+                    <div class="m-3">{t("follows.loading")}</div>
                   </Show>
 
                   {/* Spooktober Tracker */}
@@ -372,7 +351,7 @@ const App = () => {
               class="text-sm text-slate-600 hover:text-slate-800 hover:underline dark:text-slate-300 dark:hover:text-white"
               title="View source on GitHub"
             >
-              Source
+              {t("footer.source")}
             </a>
           </div>
         </footer>
