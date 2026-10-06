@@ -27,6 +27,7 @@ import {
   type IngestionHealth,
 } from "./api";
 import { formatDateTime } from "./utils/date-formatter";
+import { Spinner } from "./Spinner";
 import { ENV } from "./utils/env";
 import { describeState, formatDuration } from "./utils/ingestion";
 import { showError, showSuccess } from "./utils/toast-helpers";
@@ -216,7 +217,7 @@ export const AdminPanel = () => {
         🔧 Admin
       </h3>
 
-      <Show when={stats()} fallback={<div class="text-sm">Loading…</div>}>
+      <Show when={stats()} fallback={<Spinner />}>
         {(current) => <StatusCard stats={current()} ingestion={ingestion()!} />}
       </Show>
 
@@ -463,7 +464,7 @@ const StatusCard = (props: {
  * Loading / empty hint for a list.
  */
 const ListState = (props: { items: unknown[] | undefined; empty: string }) => (
-  <Show when={props.items} fallback={<div class="text-gray-500">Loading…</div>}>
+  <Show when={props.items} fallback={<Spinner small />}>
     <Show when={props.items!.length === 0}>
       <div class="text-gray-500">{props.empty}</div>
     </Show>

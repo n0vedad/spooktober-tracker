@@ -16,14 +16,10 @@ import {
 } from "./api";
 import { ChangeCard } from "./ChangeCard";
 import { t } from "./i18n";
+import { Spinner } from "./Spinner";
 import { formatDuration } from "./utils/ingestion";
 import { TIER_OPTIONS, tierHint, tierLabel, type Tier } from "./utils/tiers";
 import { showError } from "./utils/toast-helpers";
-
-interface Props {
-  // Accounts the user follows, with handles
-  follows: { did: string; handle: string }[];
-}
 
 // Changes shown per "load more" step
 const PAGE_SIZE = 50;
@@ -49,7 +45,7 @@ export function latestPerAccount(changes: ProfileChange[]): ProfileChange[] {
  * Render the tracker: bubble progress until the first bubble exists, then the
  * change list.
  */
-export const SpooktoberTracker = (props: Props) => {
+export const SpooktoberTracker = () => {
   // "starting" until the bubble state is known, "waiting" while the first
   // bubble is computed, "ready" once the list is shown
   const [phase, setPhase] = createSignal<"starting" | "waiting" | "ready">(
@@ -74,8 +70,6 @@ export const SpooktoberTracker = (props: Props) => {
   let clockTimer: number | undefined;
   let bubblePoll: number | undefined;
   let highlightTimer: number | undefined;
-
-  const handleOf = new Map(props.follows.map((f) => [f.did, f.handle]));
 
   /**
    * Load the list. A silent load (background refresh) keeps the current
@@ -229,7 +223,7 @@ export const SpooktoberTracker = (props: Props) => {
   return (
     <div class="mt-6 w-full overflow-hidden">
       <Show when={phase() === "starting"}>
-        <div class="m-3 text-center">{t("tracker.loading")}</div>
+        <Spinner class="m-3" />
       </Show>
 
       {/* Change list */}
@@ -310,7 +304,6 @@ export const SpooktoberTracker = (props: Props) => {
                 {(change) => (
                   <ChangeCard
                     change={change}
-                    handle={handleOf.get(change.did)}
                     expanded={expanded() === change.did}
                     history={history().get(change.did)}
                     onToggle={() => toggleHistory(change.did)}

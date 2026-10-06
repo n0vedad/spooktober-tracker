@@ -8,24 +8,12 @@ import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { Toaster } from "solid-toast";
 import { AccountMenu } from "./AccountMenu";
 import { AdminPanel } from "./AdminPanel";
-import {
-  getMe,
-  getMyFollows,
-  logout,
-  startLogin,
-  type LabelerStatus,
-  type Me,
-} from "./api";
+import { getMe, logout, startLogin, type LabelerStatus, type Me } from "./api";
 import { HandleTypeahead } from "./HandleTypeahead";
 import { lang, setLang, t, type MessageKey } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
+import { Spinner } from "./Spinner";
 import { SpooktoberTracker } from "./SpooktoberTracker";
-
-// Pairing of a DID with its corresponding handle returned from follow lookups.
-type FollowResult = {
-  did: string;
-  handle: string;
-};
 
 // Transient UI notice (a message key, so it follows language switches)
 type Notice = {
@@ -118,43 +106,7 @@ const Login = () => {
 };
 
 /**
- * Handles retrieval of the authenticated user's follow list.
- *
- * @returns Signals and action for follow fetching logic.
- */
-const Fetch = () => {
-  const [follows, setFollows] = createSignal<FollowResult[]>([]);
-  const [loading, setLoading] = createSignal(false);
-  const [loaded, setLoaded] = createSignal(false);
-
-  /**
-   * Load the follow list from the backend.
-   *
-   * @returns Promise resolving once the follows have been loaded.
-   */
-  const fetchFollows = async () => {
-    setLoading(true);
-    try {
-      setFollows(await getMyFollows());
-    } catch {
-      // Ignore follow fetch errors; the tracker shows an empty state
-    } finally {
-      setLoading(false);
-      setLoaded(true);
-    }
-  };
-
-  // Return states
-  return {
-    follows,
-    loading,
-    loaded,
-    fetchFollows,
-  };
-};
-
-/**
- * Main application component that orchestrates login, fetching and tracker rendering.
+ * Main application component that orchestrates login and tracker rendering.
  *
  * @returns JSX markup for the application shell.
  */
@@ -169,7 +121,6 @@ const App = () => {
 
   // Set variables
   const login = Login();
-  const fetch = Fetch();
 
   // Labeler opt-in of the signed-in user; the changes are shown once the
   // labeler is liked or followed (or when no labeler is configured)
@@ -180,13 +131,6 @@ const App = () => {
   };
   createEffect(() => {
     if (!login.me()) setLabeler(null);
-  });
-
-  // Auto-fetch follows when logged in
-  createEffect(() => {
-    if (login.me() && !fetch.loaded() && !fetch.loading()) {
-      fetch.fetchFollows();
-    }
   });
 
   // JSX Frontend
@@ -325,9 +269,7 @@ const App = () => {
                     </div>
                   </Show>
                   <Show when={login.checking()}>
-                    <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
-                      {t("login.loading")}
-                    </div>
+                    <Spinner class="my-3" />
                   </Show>
                 </div>
 
@@ -343,12 +285,7 @@ const App = () => {
 
                     {/* Spooktober Tracker, once the labeler is subscribed */}
                     <Show when={labelerActive()}>
-                      <Show
-                        when={fetch.loaded() && !fetch.loading()}
-                        fallback={<div class="m-3">{t("follows.loading")}</div>}
-                      >
-                        <SpooktoberTracker follows={fetch.follows()} />
-                      </Show>
+                      <SpooktoberTracker />
                     </Show>
                   </div>
                 </Show>

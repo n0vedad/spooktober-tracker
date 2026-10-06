@@ -49,7 +49,7 @@ describe("SpooktoberTracker", () => {
       bubble: READY,
     });
 
-    render(() => <SpooktoberTracker follows={[]} />);
+    render(() => <SpooktoberTracker />);
 
     expect(await screen.findByText("Boo")).toBeInTheDocument();
   });
@@ -64,7 +64,7 @@ describe("SpooktoberTracker", () => {
       bubble: READY,
     });
 
-    render(() => <SpooktoberTracker follows={[]} />);
+    render(() => <SpooktoberTracker />);
 
     expect(
       await screen.findByText(/1 \/ 3 follows checked/),

@@ -292,15 +292,25 @@ describe("GET /api/changes", () => {
 });
 
 describe("/api/me", () => {
-  it("lists the user's follows", async () => {
+  it("shows the current handle of follows", async () => {
+    await recordChange({
+      did: ALICE,
+      handle: "alice.old",
+      old_display_name: "Alice 🎃",
+      new_display_name: "Alice 👻",
+      changed_at: new Date("2026-10-05T13:00:00Z"),
+      source_seq: 2,
+    });
+
     const res = await request(app)
-      .get("/api/me/follows")
+      .get("/api/me/changes")
       .set("Cookie", await loginAs(BOB))
       .expect(200);
 
-    expect(res.body.data.follows).toEqual([
-      { did: ALICE, handle: "alice.test" },
-    ]);
+    expect(res.body.data.changes[0]).toMatchObject({
+      new_display_name: "Alice 👻",
+      handle: "alice.test",
+    });
   });
 
   it("returns the changes of the user's follows", async () => {

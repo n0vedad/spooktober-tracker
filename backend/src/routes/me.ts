@@ -29,30 +29,6 @@ const CHANGES_LIMIT = 500;
 router.use(requireAuth);
 
 /**
- * GET /api/me/follows
- * Accounts the signed-in user follows (DID + handle).
- */
-router.get("/follows", async (req, res) => {
-  try {
-    const follows = await getFollows(req.did!);
-    const response: APIResponse<{
-      follows: Array<{ did: string; handle: string }>;
-    }> = {
-      success: true,
-      data: { follows: follows.map(({ did, handle }) => ({ did, handle })) },
-    };
-    res.json(response);
-  } catch (error) {
-    console.error("Error fetching follows:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Failed to fetch follows",
-    };
-    res.status(500).json(response);
-  }
-});
-
-/**
  * GET /api/me/bubble?refresh=false
  * State of the user's bubble; starts computing it when missing or stale.
  */
@@ -121,9 +97,12 @@ router.get(
         minCommon,
         { limit: CHANGES_LIMIT, sort },
       );
+      // Current handles of follows beat the one stored with the change
+      const handleOf = new Map(follows.map((f) => [f.did, f.handle]));
       const changes = rows.map(
         ({ common_count, score: _score, ...change }) => ({
           ...change,
+          handle: handleOf.get(change.did) ?? change.handle,
           tier: (common_count === null
             ? "follows"
             : tierOf(common_count, followsCount)) as Tier,

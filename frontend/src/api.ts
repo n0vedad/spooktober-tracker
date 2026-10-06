@@ -99,20 +99,6 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Accounts the signed-in user follows.
- *
- * @returns Follow records (DID + handle).
- */
-export async function getMyFollows(): Promise<
-  Array<{ did: string; handle: string }>
-> {
-  const data = await request<{
-    follows: Array<{ did: string; handle: string }>;
-  }>("/me/follows", {}, "Failed to load follows");
-  return data.follows;
-}
-
-/**
  * State of the signed-in user's bubble (second-degree network).
  */
 export type BubbleStatus =

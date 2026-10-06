@@ -11,6 +11,7 @@ import { createSignal } from "solid-js";
 export type Lang = "en" | "de";
 
 const en = {
+  loading: "Loading",
   "theme.title": "Theme",
   "lang.switch": "Deutsch",
   "footer.source": "Source",
@@ -19,7 +20,6 @@ const en = {
   "login.button": "Login",
   "login.enterHandle": "Please enter your handle.",
   "login.redirecting": "Redirecting to Bluesky...",
-  "login.loading": "Loading...",
   "login.loggedInAs": "Logged in as",
   "login.serverDown": "Could not reach the server. Please try again later.",
   "login.logoutFailed":
@@ -48,9 +48,6 @@ const en = {
   "faq.removeA":
     'Yes. After logging in, click your avatar at the top right and choose "Delete all my data" to remove your own profile change history.',
 
-  "follows.loading": "Loading follows...",
-
-  "tracker.loading": "Loading changes...",
   "tracker.heading": "🎃 Detected Changes ({count})",
   "tracker.loadMore": "Load more ({count} remaining)",
   "tracker.newest": "🕒 Newest first",
@@ -101,7 +98,6 @@ const en = {
   "change.newAvatar": "New avatar",
   "change.followedBy": "followed by {count} of your follows",
   "change.history": "Change history",
-  "change.historyLoading": "Loading history...",
 
   "optin.title": "🎃 Get your own Spooktober labels",
   "optin.textBefore":
@@ -125,6 +121,7 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const de: Record<MessageKey, string> = {
+  loading: "Wird geladen",
   "theme.title": "Design",
   "lang.switch": "English",
   "footer.source": "Quellcode",
@@ -133,7 +130,6 @@ const de: Record<MessageKey, string> = {
   "login.button": "Login",
   "login.enterHandle": "Bitte gib deinen Handle ein.",
   "login.redirecting": "Weiterleitung zu Bluesky…",
-  "login.loading": "Lädt…",
   "login.loggedInAs": "Angemeldet als",
   "login.serverDown":
     "Der Server ist nicht erreichbar. Bitte versuch es später noch einmal.",
@@ -165,9 +161,6 @@ const de: Record<MessageKey, string> = {
   "faq.removeA":
     "Ja. Klick nach dem Login oben rechts auf deinen Avatar und wähle „Alle meine Daten löschen“, um deinen eigenen Änderungsverlauf zu entfernen.",
 
-  "follows.loading": "Follows werden geladen…",
-
-  "tracker.loading": "Änderungen werden geladen…",
   "tracker.heading": "🎃 Erkannte Änderungen ({count})",
   "tracker.loadMore": "Mehr laden (noch {count})",
   "tracker.newest": "🕒 Neueste zuerst",
@@ -218,7 +211,6 @@ const de: Record<MessageKey, string> = {
   "change.newAvatar": "Neues Profilbild",
   "change.followedBy": "{count} deiner Follows folgen diesem Account",
   "change.history": "Änderungsverlauf",
-  "change.historyLoading": "Verlauf wird geladen…",
 
   "optin.title": "🎃 Hol dir deine eigenen Spooktober-Labels",
   "optin.textBefore":

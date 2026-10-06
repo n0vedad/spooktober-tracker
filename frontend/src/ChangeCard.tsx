@@ -6,6 +6,7 @@
 import { createSignal, For, Show } from "solid-js";
 import type { ProfileChange } from "../../shared/types";
 import { t } from "./i18n";
+import { Spinner } from "./Spinner";
 import { formatDateTime } from "./utils/date-formatter";
 import { tierEmoji } from "./utils/tiers";
 
@@ -132,8 +133,6 @@ export const ChangeDetails = (props: { change: ProfileChange }) => {
 
 interface Props {
   change: ProfileChange;
-  // Handle known from the user's follow list, preferred over the stored one
-  handle?: string;
   expanded: boolean;
   history: ProfileChange[] | undefined;
   onToggle: () => void;
@@ -146,7 +145,7 @@ interface Props {
  */
 export const ChangeCard = (props: Props) => {
   const name = () => {
-    const handle = props.handle ?? props.change.handle;
+    const handle = props.change.handle;
     return handle ? `@${handle}` : props.change.did;
   };
 
@@ -190,12 +189,7 @@ export const ChangeCard = (props: Props) => {
           <h4 class="mb-2 text-sm font-bold text-orange-800 dark:text-orange-300">
             {t("change.history")}
           </h4>
-          <Show
-            when={props.history}
-            fallback={
-              <p class="text-sm text-gray-500">{t("change.historyLoading")}</p>
-            }
-          >
+          <Show when={props.history} fallback={<Spinner small />}>
             <div class="space-y-2">
               <For each={props.history}>
                 {(entry) => (
