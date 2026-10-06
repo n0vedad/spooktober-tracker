@@ -213,23 +213,82 @@ export async function purgeMyData(): Promise<{ deletedChanges: number }> {
 }
 
 /**
- * Admin statistics.
+ * State of the Jetstream ingestion (see backend ingest/health.ts).
  */
-export interface AdminStats {
-  totalMonitoredDIDs: number;
-  jetstreamStatus: string;
-  cursorTimestamp: string | null;
-  isInBackfill: boolean;
+export interface IngestionHealth {
+  state: "stopped" | "stalled" | "starting" | "catching_up" | "live";
+  running: boolean;
+  startedAt: string | null;
+  lastSeq: number | null;
+  lastEventTime: string | null;
+  eventsProcessed: number;
+  changesDetected: number;
+  consecutiveFailures: number;
+  lagMs: number | null;
   uptimeSeconds: number | null;
 }
 
 /**
+ * Admin statistics.
+ */
+export interface AdminStats {
+  ingestion: IngestionHealth;
+  trackedAccounts: number;
+  labeler: {
+    enabled: boolean;
+    optIns: number;
+    activeLabels: number;
+    labeledAccounts: number;
+  };
+}
+
+/**
  * Get admin statistics (admin only).
- *
- * @returns Aggregate ingestion stats payload.
  */
 export async function getAdminStats(): Promise<AdminStats> {
   return request<AdminStats>("/admin/stats", {}, "Failed to fetch admin stats");
+}
+
+/**
+ * Accounts flagged as bots (admin only).
+ */
+export async function getNoisyAccounts(): Promise<
+  Array<{
+    did: string;
+    handle: string | null;
+    reason: string;
+    flagged_at: string;
+  }>
+> {
+  return request("/admin/noisy-accounts", {}, "Failed to fetch bots");
+}
+
+/**
+ * Remove the bot flag from an account (admin only).
+ *
+ * @param did Account DID.
+ */
+export async function unflagNoisyAccount(did: string): Promise<string> {
+  const data = await request<{ message: string }>(
+    `/admin/noisy-accounts/${encodeURIComponent(did)}`,
+    { method: "DELETE" },
+    "Failed to remove bot flag",
+  );
+  return data.message;
+}
+
+/**
+ * Accounts that opted in to the labeler (admin only).
+ */
+export async function getOptIns(): Promise<
+  Array<{
+    did: string;
+    handle: string | null;
+    via: string;
+    opted_in_at: string;
+  }>
+> {
+  return request("/admin/optins", {}, "Failed to fetch opt-ins");
 }
 
 /**
