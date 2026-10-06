@@ -77,7 +77,7 @@ export async function getBubbleInfo(
  *
  * @param userDid User DID.
  * @param followsCount Number of accounts the user follows.
- * @param members Second-degree accounts with their scores.
+ * @param members Second-degree accounts with their common follows.
  */
 export async function saveBubble(
   userDid: string,
@@ -93,14 +93,9 @@ export async function saveBubble(
     for (let i = 0; i < members.length; i += INSERT_CHUNK) {
       const chunk = members.slice(i, i + INSERT_CHUNK);
       await client.query(
-        `INSERT INTO bubble_members (user_did, did, common_count, score)
-         SELECT $1, * FROM unnest($2::text[], $3::int[], $4::real[])`,
-        [
-          userDid,
-          chunk.map((m) => m.did),
-          chunk.map((m) => m.commonCount),
-          chunk.map((m) => m.score),
-        ],
+        `INSERT INTO bubble_members (user_did, did, common_count)
+         SELECT $1, * FROM unnest($2::text[], $3::int[])`,
+        [userDid, chunk.map((m) => m.did), chunk.map((m) => m.commonCount)],
       );
     }
     await client.query(
@@ -125,7 +120,6 @@ export async function saveBubble(
 export interface ScopedChangeRow extends ProfileChangeRow {
   // null for accounts the user follows directly
   common_count: number | null;
-  score: number | null;
 }
 
 /**
@@ -136,33 +130,27 @@ export interface ScopedChangeRow extends ProfileChangeRow {
  * @param followDids Accounts the user follows directly.
  * @param minCommon Minimum common follows for bubble members, or null for
  *   direct follows only.
- * @param options Page size and sort order (newest first, or closest first).
- * @returns Matching changes.
+ * @param options Page size.
+ * @returns Matching changes, newest first.
  */
 export async function getChangesInScope(
   userDid: string,
   followDids: readonly string[],
   minCommon: number | null,
-  options: { limit: number; sort: "recent" | "closeness" },
+  options: { limit: number },
 ): Promise<ScopedChangeRow[]> {
-  // Direct follows first, then by Adamic-Adar score; newest first within ties
-  const order =
-    options.sort === "closeness"
-      ? "m.common_count IS NULL DESC, m.score DESC, pc.id DESC"
-      : "pc.id DESC";
-
   const result = await pool.query<ScopedChangeRow>(
     `WITH members AS (
-       SELECT unnest($2::text[]) AS did, NULL::int AS common_count, NULL::real AS score
+       SELECT unnest($2::text[]) AS did, NULL::int AS common_count
        UNION ALL
-       SELECT did, common_count, score FROM bubble_members
+       SELECT did, common_count FROM bubble_members
        WHERE user_did = $1 AND $3::int IS NOT NULL AND common_count >= $3
      )
-     SELECT pc.*, m.common_count, m.score
+     SELECT pc.*, m.common_count
      FROM profile_changes pc
      JOIN members m ON m.did = pc.did
      WHERE ${VISIBLE_CHANGE}
-     ORDER BY ${order}
+     ORDER BY pc.id DESC
      LIMIT $4`,
     [userDid, followDids, minCommon, options.limit],
   );

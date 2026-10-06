@@ -1,6 +1,6 @@
 /**
  * Social-graph "bubble" of a user: accounts followed by the user's follows
- * (second degree), scored by how strongly they are connected to the user.
+ * (second degree), with how many of the follows follow them.
  */
 
 /**
@@ -24,8 +24,6 @@ export interface BubbleMember {
   did: string;
   // How many of the user's follows follow this account
   commonCount: number;
-  // Adamic-Adar score: common follows weighted by 1 / log(1 + their follow count)
-  score: number;
 }
 
 /**
@@ -45,17 +43,11 @@ export function computeBubble(
   const members = new Map<string, BubbleMember>();
 
   for (const follows of followLists.values()) {
-    // Following few accounts makes each of them a stronger signal
-    const weight = 1 / Math.log(1 + follows.length);
     for (const did of new Set(follows)) {
       if (did === userDid || direct.has(did)) continue;
       const member = members.get(did);
-      if (member) {
-        member.commonCount++;
-        member.score += weight;
-      } else {
-        members.set(did, { did, commonCount: 1, score: weight });
-      }
+      if (member) member.commonCount++;
+      else members.set(did, { did, commonCount: 1 });
     }
   }
 

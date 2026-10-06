@@ -26,23 +26,6 @@ describe("computeBubble", () => {
     expect(computeBubble(ME, lists).map((m) => m.did)).toEqual(["did:plc:x"]);
   });
 
-  it("weights follows from selective accounts higher (Adamic-Adar)", () => {
-    const manyFollows = Array.from({ length: 999 }, (_, i) => `did:plc:n${i}`);
-    const lists = new Map([
-      // Follows only 2 accounts: strong signal for x
-      ["did:plc:picky", ["did:plc:x", "did:plc:z"]],
-      // Follows 1000 accounts: weak signal for y
-      ["did:plc:everyone", ["did:plc:y", ...manyFollows]],
-    ]);
-
-    const byDid = new Map(computeBubble(ME, lists).map((m) => [m.did, m]));
-
-    expect(byDid.get("did:plc:x")!.score).toBeCloseTo(1 / Math.log(3));
-    expect(byDid.get("did:plc:x")!.score).toBeGreaterThan(
-      byDid.get("did:plc:y")!.score,
-    );
-  });
-
   it("ignores duplicate entries within one follow list", () => {
     const lists = new Map([["did:plc:a", ["did:plc:x", "did:plc:x"]]]);
     expect(computeBubble(ME, lists)[0].commonCount).toBe(1);

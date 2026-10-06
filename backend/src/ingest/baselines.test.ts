@@ -5,6 +5,7 @@ import {
   findMissingBaselines,
   getSnapshot,
   listWatchedAccounts,
+  purgeAccount,
   saveSnapshot,
 } from "../db.js";
 import { saveOptIn } from "../labeler/store.js";
@@ -121,14 +122,23 @@ describe("listWatchedAccounts", () => {
     await saveFollowList(ALICE, [BOB]);
     await saveFollowList(BOB, ["did:plc:unrelated"]);
     await saveBubble(ALICE, 1, [
-      { did: BOB, commonCount: 0, score: 0 },
-      { did: CAROL, commonCount: 1, score: 1 },
+      { did: BOB, commonCount: 0 },
+      { did: CAROL, commonCount: 1 },
     ]);
     await saveOptIn("did:plc:fan", "like");
 
     expect((await listWatchedAccounts()).sort()).toEqual(
       [ALICE, BOB, CAROL, "did:plc:fan"].sort(),
     );
+  });
+
+  it("leaves out accounts that are not tracked", async () => {
+    await saveOptIn("did:plc:fan", "like");
+    await saveOptIn("did:plc:gone", "like");
+    await purgeAccount("did:plc:gone");
+
+    expect(await listWatchedAccounts()).toEqual(["did:plc:fan"]);
+    expect(await findMissingBaselines(["did:plc:gone"])).toEqual([]);
   });
 });
 

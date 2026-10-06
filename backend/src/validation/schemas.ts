@@ -24,10 +24,9 @@ export const changesPageQuerySchema = z.object({
   before: z.coerce.number().int().positive().optional(),
 });
 
-// Per-user change view: how far into the bubble, and the order
+// Per-user change view: how far into the bubble
 export const scopedChangesQuerySchema = z.object({
   scope: z.enum(["follows", "inner", "bubble", "edge"]).default("follows"),
-  sort: z.enum(["recent", "closeness"]).default("recent"),
 });
 
 // Bubble status (refresh=true recomputes even a fresh bubble)

@@ -150,7 +150,36 @@ describe("bubble service", () => {
     expect(await service.status(ME)).toEqual({
       state: "failed",
       error: "Could not load your network",
+      previous: null,
     });
+  });
+
+  it("keeps the last bubble usable when its refresh fails", async () => {
+    await saveBubble(ME, 2, [{ did: X, commonCount: 2 }]);
+    const fetchFollowList = vi.fn(async () => {
+      throw new Error("down");
+    });
+    const service = createBubbleService({
+      fetchFollowList,
+      getCachedFollowLists,
+      saveFollowList,
+      getBubbleInfo,
+      saveBubble,
+      log: quiet,
+    });
+
+    await service.ensure(ME, true);
+    await service.settle(ME);
+
+    expect(await service.status(ME)).toMatchObject({
+      state: "failed",
+      previous: { followsCount: 2 },
+    });
+
+    // The next call tries again although the stored bubble is fresh
+    await service.ensure(ME);
+    await service.settle(ME);
+    expect(fetchFollowList).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -167,8 +196,8 @@ describe("getChangesInScope", () => {
 
   beforeEach(async () => {
     await saveBubble(ME, 2, [
-      { did: X, commonCount: 2, score: 0.9 },
-      { did: Y, commonCount: 1, score: 0.4 },
+      { did: X, commonCount: 2 },
+      { did: Y, commonCount: 1 },
     ]);
     await change(A, 1);
     await change(X, 2);
@@ -178,29 +207,13 @@ describe("getChangesInScope", () => {
 
   it("limits the scope by common follows", async () => {
     const dids = async (minCommon: number | null) =>
-      (
-        await getChangesInScope(ME, [A, B], minCommon, {
-          limit: 50,
-          sort: "recent",
-        })
-      ).map((c) => c.did);
+      (await getChangesInScope(ME, [A, B], minCommon, { limit: 50 })).map(
+        (c) => c.did,
+      );
 
     expect(await dids(null)).toEqual([A]);
     expect(await dids(2)).toEqual([X, A]);
     expect(await dids(1)).toEqual([Y, X, A]);
-  });
-
-  it("sorts direct follows first, then by closeness", async () => {
-    const rows = await getChangesInScope(ME, [A, B], 1, {
-      limit: 50,
-      sort: "closeness",
-    });
-
-    expect(rows.map((r) => [r.did, r.common_count])).toEqual([
-      [A, null],
-      [X, 2],
-      [Y, 1],
-    ]);
   });
 });
 

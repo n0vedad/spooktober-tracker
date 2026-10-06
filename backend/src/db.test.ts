@@ -162,7 +162,7 @@ describe("account removal", () => {
       "INSERT INTO bubbles (user_did, follows_count) VALUES ($1, 1)",
       [ALICE],
     );
-    await pool.query("INSERT INTO bubble_members VALUES ($1, $2, 1, 1)", [
+    await pool.query("INSERT INTO bubble_members VALUES ($1, $2, 1)", [
       ALICE,
       BOB,
     ]);
