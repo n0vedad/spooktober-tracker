@@ -157,6 +157,39 @@ export async function getOptIns(): Promise<Map<string, string>> {
 }
 
 /**
+ * All opt-ins, newest first (admin view).
+ */
+export async function listOptIns(): Promise<
+  Array<{ did: string; via: string; opted_in_at: Date }>
+> {
+  const result = await pool.query(
+    "SELECT did, via, opted_in_at FROM labeler_optins ORDER BY opted_in_at DESC",
+  );
+  return result.rows;
+}
+
+/**
+ * Number of currently effective labels and of labeled accounts.
+ */
+export async function countActiveLabels(): Promise<{
+  labels: number;
+  accounts: number;
+}> {
+  const result = await pool.query<{ labels: string; accounts: string }>(
+    `SELECT COUNT(*) AS labels, COUNT(DISTINCT uri) AS accounts FROM (
+       SELECT DISTINCT ON (src, uri, val) uri, neg, exp
+       FROM labels ORDER BY src, uri, val, seq DESC
+     ) latest
+     WHERE NOT neg AND (exp IS NULL OR exp > $1)`,
+    [new Date().toISOString()],
+  );
+  return {
+    labels: Number(result.rows[0].labels),
+    accounts: Number(result.rows[0].accounts),
+  };
+}
+
+/**
  * How an account opted in ("like", "follow", "like+follow"), or null.
  *
  * @param did Account DID.

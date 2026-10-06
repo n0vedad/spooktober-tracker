@@ -12,7 +12,10 @@ import {
   removeIgnoredUser,
   unflagNoisy,
 } from "../db.js";
+import { describeIngestion, type IngestionHealth } from "../ingest/health.js";
 import { ingester } from "../ingest/index.js";
+import { labeler } from "../labeler/index.js";
+import { countActiveLabels, listOptIns } from "../labeler/store.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { resolveHandles } from "../utils/handle-resolver.js";
 import { validate } from "../validation/middleware.js";
@@ -25,52 +28,78 @@ import {
 // Create Router
 const router = express.Router();
 
-// Last event older than this counts as "catching up" rather than live
-const LIVE_THRESHOLD_MS = 60_000;
-
 /**
  * GET /api/admin/stats
- * Ingestion statistics
+ * Ingestion health, tracked accounts and labeler figures
  */
 router.get("/stats", requireAdmin, async (_req, res) => {
   try {
-    const status = ingester.status();
-    const trackedAccounts = await countSnapshots();
-    const lastEventMs = status.lastEventTime
-      ? Date.parse(status.lastEventTime)
-      : null;
+    const [trackedAccounts, optIns, labels] = await Promise.all([
+      countSnapshots(),
+      labeler ? listOptIns().then((rows) => rows.length) : 0,
+      labeler ? countActiveLabels() : { labels: 0, accounts: 0 },
+    ]);
 
-    // Field names kept compatible with the current admin panel
     const response: APIResponse<{
-      totalMonitoredDIDs: number;
-      totalMonitoringUsers: number;
-      jetstreamStatus: string;
-      cursorTimestamp: string | null;
-      isInBackfill: boolean;
-      uptimeSeconds: number | null;
-      ingestion: typeof status;
+      ingestion: IngestionHealth;
+      trackedAccounts: number;
+      labeler: {
+        enabled: boolean;
+        optIns: number;
+        activeLabels: number;
+        labeledAccounts: number;
+      };
     }> = {
       success: true,
       data: {
-        totalMonitoredDIDs: trackedAccounts,
-        totalMonitoringUsers: 0,
-        jetstreamStatus: status.running ? "connected" : "disconnected",
-        cursorTimestamp: status.lastEventTime,
-        isInBackfill:
-          lastEventMs !== null && Date.now() - lastEventMs > LIVE_THRESHOLD_MS,
-        uptimeSeconds: status.startedAt
-          ? Math.floor((Date.now() - Date.parse(status.startedAt)) / 1000)
-          : null,
-        ingestion: status,
+        ingestion: describeIngestion(ingester.status()),
+        trackedAccounts,
+        labeler: {
+          enabled: labeler !== null,
+          optIns,
+          activeLabels: labels.labels,
+          labeledAccounts: labels.accounts,
+        },
       },
     };
-
     res.json(response);
   } catch (error) {
     console.error("Error fetching admin stats:", error);
     const response: APIResponse<never> = {
       success: false,
       error: "Failed to fetch admin stats",
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * GET /api/admin/optins
+ * Accounts that opted in to the labeler, newest first
+ */
+router.get("/optins", requireAdmin, async (_req, res) => {
+  try {
+    const optIns = labeler ? await listOptIns() : [];
+    const resolved = await resolveHandles(optIns.map((o) => o.did));
+    const handles = new Map(resolved.map((r) => [r.did, r.handle]));
+
+    const response: APIResponse<
+      Array<{
+        did: string;
+        handle: string | null;
+        via: string;
+        opted_in_at: Date;
+      }>
+    > = {
+      success: true,
+      data: optIns.map((o) => ({ ...o, handle: handles.get(o.did) ?? null })),
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching opt-ins:", error);
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Failed to fetch opt-ins",
     };
     res.status(500).json(response);
   }

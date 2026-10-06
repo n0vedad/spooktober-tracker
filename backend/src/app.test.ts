@@ -391,9 +391,9 @@ describe("/api/admin", () => {
       .expect(200);
 
     expect(res.body.data).toMatchObject({
-      jetstreamStatus: "connected",
-      isInBackfill: false,
-      ingestion: { lastSeq: 42, changesDetected: 1 },
+      trackedAccounts: 0,
+      ingestion: { state: "live", lastSeq: 42, changesDetected: 1 },
+      labeler: { enabled: true, optIns: 0, activeLabels: 0 },
     });
   });
 
@@ -426,6 +426,17 @@ describe("/api/admin", () => {
       .set("Cookie", bob)
       .expect(200);
     expect(visible.body.data.changes).toHaveLength(1);
+  });
+
+  it("lists labeler opt-ins", async () => {
+    await saveOptIn(BOB, "like+follow");
+
+    const res = await request(app)
+      .get("/api/admin/optins")
+      .set("Cookie", await loginAs(ADMIN))
+      .expect(200);
+
+    expect(res.body.data).toMatchObject([{ did: BOB, via: "like+follow" }]);
   });
 
   it("refuses to start ingestion twice", async () => {

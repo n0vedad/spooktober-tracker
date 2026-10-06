@@ -9,6 +9,7 @@ import { createApp } from "./app.js";
 import { getSessionDid, purgeExpiredSessions } from "./auth/sessions.js";
 import { ADMIN_DID, PORT } from "./config.js";
 import { initDB, pool } from "./db.js";
+import { describeIngestion } from "./ingest/health.js";
 import { ingester } from "./ingest/index.js";
 import {
   labeler,
@@ -23,24 +24,8 @@ import { readSessionToken } from "./middleware/auth.js";
 const IPV6_ANY = "::";
 // How often expired sessions and OAuth states are deleted
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-// How often live status is pushed to connected admin clients
+// How often the ingestion status is pushed to connected admin clients
 const STATUS_BROADCAST_INTERVAL_MS = 2000;
-// Last event older than this counts as "catching up" rather than live
-const LIVE_THRESHOLD_MS = 60_000;
-
-/**
- * Cursor payload for the admin panel's live display.
- */
-function cursorInfo() {
-  const { lastEventTime } = ingester.status();
-  return {
-    timestamp: lastEventTime,
-    isInBackfill:
-      lastEventTime !== null &&
-      Date.now() - Date.parse(lastEventTime) > LIVE_THRESHOLD_MS,
-  };
-}
-
 /**
  * Boot the server, initialise DB, start ingestion and bind listeners.
  *
@@ -106,25 +91,22 @@ const start = async () => {
       }
     });
 
-    // Send the current cursor to each new client
+    // Ingestion health as a WebSocket message for the admin panel
+    const ingestionMessage = () =>
+      JSON.stringify({
+        type: "ingestion",
+        data: describeIngestion(ingester.status()),
+      });
+
+    // Send the current state to each new client
     wss.on("connection", (ws: WebSocket) => {
-      ws.send(
-        JSON.stringify({
-          type: "cursor_update",
-          data: { cursor: cursorInfo() },
-        }),
-      );
+      ws.send(ingestionMessage());
     });
 
-    // Push cursor updates to all clients whenever they change
-    let lastBroadcast = "";
+    // Push the state to all clients (lag and counters change continuously)
     const broadcastTimer = setInterval(() => {
-      const message = JSON.stringify({
-        type: "cursor_update",
-        data: { cursor: cursorInfo() },
-      });
-      if (message === lastBroadcast) return;
-      lastBroadcast = message;
+      if (wss.clients.size === 0) return;
+      const message = ingestionMessage();
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) client.send(message);
       });
