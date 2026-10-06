@@ -42,8 +42,8 @@ pnpm install
 ```
 
 2) Configure Postgres
-- Create a user and database
-- Set `DATABASE_URL` in `backend/.env`
+- Local development: `pnpm dev` also starts an in-process PGlite database on `127.0.0.1:55434` (data in `backend/.pglite-dev`); set `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55434/postgres` in `backend/.env`
+- Otherwise: create a user and database and set `DATABASE_URL` in `backend/.env`
 
 3) Environment files
 ```
@@ -62,6 +62,7 @@ Dev
 pnpm dev
 ```
 - Frontend dev server: `VITE_DEV_SERVER_HOST:VITE_DEV_SERVER_PORT` (default `127.0.0.1:13214`); it proxies `/api`, `/oauth` and `/ws` to the backend
+- Database: PGlite on `127.0.0.1:55434` (`pnpm dev:db`); the backend waits until it accepts connections. `pnpm dev:db:reset` deletes it (stop `pnpm dev` first); the next start creates an empty one
 - Backend: `PORT` (default `3000`); set `FRONTEND_URL=http://127.0.0.1:13214` so the login returns to the dev server
 - Open the app via `http://127.0.0.1:13214` (not `localhost`), so the session cookie matches the OAuth callback host
 

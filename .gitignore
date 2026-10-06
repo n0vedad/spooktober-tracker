@@ -3,6 +3,7 @@ dist
 .DS_Store
 .env
 *.log
+.pglite-dev
 .venv
 __pycache__
 *.pyc

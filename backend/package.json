@@ -3,7 +3,9 @@
   "type": "module",
   "license": "0BSD",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node scripts/wait-for-db.mjs && tsx watch src/server.ts",
+    "dev:db": "pglite-server --db=.pglite-dev --port=55434 --max-connections=1",
+    "dev:db:reset": "node -e \"require('fs').rmSync('.pglite-dev', { recursive: true, force: true })\" && echo 'Local dev database deleted'",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/backend/src/server.js",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\"",

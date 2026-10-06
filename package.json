@@ -7,7 +7,9 @@
   "scripts": {
     "dev:frontend": "pnpm --filter frontend dev",
     "dev:backend": "pnpm --filter backend dev",
-    "dev": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+    "dev:db": "pnpm --filter backend dev:db",
+    "dev:db:reset": "pnpm --filter backend dev:db:reset",
+    "dev": "concurrently -n web,api,db \"pnpm dev:frontend\" \"pnpm dev:backend\" \"pnpm dev:db\"",
     "clean": "rimraf frontend/dist backend/dist",
     "clean:all": "rimraf frontend/dist backend/dist node_modules frontend/node_modules backend/node_modules shared/node_modules",
     "build:frontend": "pnpm --filter frontend build",
