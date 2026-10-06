@@ -10,10 +10,11 @@ import { formatDateTime } from "./utils/date-formatter";
 import { tierEmoji } from "./utils/tiers";
 
 /**
- * CDN URL of an avatar blob.
+ * URL of an avatar: the backend serves its archived thumbnail or redirects
+ * to the Bluesky CDN.
  */
 export const avatarUrl = (did: string, cid: string) =>
-  `https://cdn.bsky.app/img/avatar/plain/${did}/${cid}@jpeg`;
+  `/api/avatars/${did}/${cid}`;
 
 // Avatar URLs that failed to load. Kept across re-renders (the list refresh
 // recreates the cards), so a gone avatar doesn't flash its alt text again.
@@ -21,8 +22,8 @@ const failedAvatars = new Set<string>();
 
 /**
  * One avatar, or a placeholder when there is none or it can't be loaded.
- * The PDS deletes a replaced avatar right away; the CDN keeps serving it only
- * while it is still cached (up to 7 days).
+ * The PDS deletes a replaced avatar right away, so an old avatar is only
+ * shown if the backend archived it in time or the CDN still has it cached.
  */
 const Avatar = (props: {
   did: string;

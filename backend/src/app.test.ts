@@ -2,6 +2,8 @@ import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDB } from "../test/db-helpers.js";
 import { createApp } from "./app.js";
+import { thumbnailUrl } from "./avatars/archive.js";
+import { saveThumb } from "./avatars/store.js";
 import { oauthClient } from "./auth/oauth.js";
 import {
   SESSION_COOKIE,
@@ -174,6 +176,37 @@ describe("authentication", () => {
       .set("Origin", "https://evil.example")
       .expect(403);
     expect(await getChangeHistory(ALICE)).toHaveLength(1);
+  });
+});
+
+describe("avatars", () => {
+  const CID = "bafkreiavatarthumbnailtest";
+
+  it("serves archived thumbnails without login", async () => {
+    await saveThumb(ALICE, CID, {
+      data: Buffer.from([1, 2, 3]),
+      content_type: "image/jpeg",
+    });
+
+    const res = await request(app)
+      .get(`/api/avatars/${ALICE}/${CID}`)
+      .expect(200);
+
+    expect(res.headers["content-type"]).toBe("image/jpeg");
+    expect(res.headers["cache-control"]).toContain("immutable");
+    expect(Buffer.from(res.body)).toEqual(Buffer.from([1, 2, 3]));
+  });
+
+  it("redirects to the CDN when nothing is archived", async () => {
+    const res = await request(app)
+      .get(`/api/avatars/${ALICE}/${CID}`)
+      .expect(302);
+
+    expect(res.headers.location).toBe(thumbnailUrl(ALICE, CID));
+  });
+
+  it("rejects malformed paths", async () => {
+    await request(app).get(`/api/avatars/${ALICE}/not-a-cid`).expect(400);
   });
 });
 

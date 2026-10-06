@@ -20,6 +20,7 @@ import {
   fetchCurrentHandle,
   findPreviousHandle,
 } from "../utils/handle-resolver.js";
+import { avatarArchive } from "../avatars/index.js";
 import { labeler } from "../labeler/index.js";
 import { Ingester, PROFILE_COLLECTION, type EventSource } from "./ingester.js";
 import { createProfileTracker } from "./profile-tracker.js";
@@ -60,6 +61,8 @@ export const ingester = new Ingester({
     saveSnapshot,
     recordChange: async (change) => {
       const row = await recordChange(change);
+      // Keep both avatars before the CDN forgets the old one (background)
+      if (row) avatarArchive.onChange(row);
       // Label the change for opted-in accounts; never block ingestion on it
       if (row && labeler) {
         await labeler.onChange(row).catch((error) => {

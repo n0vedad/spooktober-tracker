@@ -239,6 +239,19 @@ export async function initDB() {
       );
     `);
 
+    // Thumbnails of avatars seen in changes. A PDS deletes a replaced avatar
+    // right away, so the old one is only shown if it was archived in time.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS avatar_thumbs (
+        did TEXT NOT NULL,
+        cid TEXT NOT NULL,
+        data BYTEA NOT NULL,
+        content_type TEXT NOT NULL,
+        fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (did, cid)
+      );
+    `);
+
     // Create system_settings table for persistent configuration
     await client.query(`
       CREATE TABLE IF NOT EXISTS system_settings (
@@ -673,6 +686,7 @@ export async function purgeAccount(did: string): Promise<number> {
     await client.query("DELETE FROM bubble_members WHERE user_did = $1", [did]);
     await client.query("DELETE FROM bubbles WHERE user_did = $1", [did]);
     await client.query("DELETE FROM follow_lists WHERE did = $1", [did]);
+    await client.query("DELETE FROM avatar_thumbs WHERE did = $1", [did]);
     await client.query("COMMIT");
     return deleted.rowCount ?? 0;
   } catch (error) {

@@ -13,6 +13,7 @@ import { FRONTEND_URL, PUBLIC_URL, getCorsConfig } from "./config.js";
 import { loadSession, rejectCrossSite } from "./middleware/auth.js";
 import adminRouter from "./routes/admin.js";
 import authRouter from "./routes/auth.js";
+import avatarsRouter from "./routes/avatars.js";
 import changesRouter from "./routes/changes.js";
 import meRouter from "./routes/me.js";
 import xrpcRouter from "./routes/xrpc.js";
@@ -86,6 +87,7 @@ export function createApp(): express.Express {
   // API Routes
   app.use("/api/me", meRouter);
   app.use("/api/changes", changesRouter);
+  app.use("/api/avatars", avatarsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/xrpc", xrpcRouter);
 
