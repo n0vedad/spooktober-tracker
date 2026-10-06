@@ -42,7 +42,7 @@ const loginQuerySchema = z.object({
       z
         .string()
         .regex(
-          /^(did:(plc|web):[a-z0-9.:%-]+|[a-z0-9-]+(\.[a-z0-9-]+)+)$/,
+          /^(did:(plc:[a-z0-9]+|web:[a-z0-9.-]+(%3a[0-9]+)?)|[a-z0-9-]+(\.[a-z0-9-]+)+)$/,
           "Invalid handle",
         ),
     ),

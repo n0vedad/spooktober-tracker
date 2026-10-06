@@ -4,15 +4,11 @@
 
 import { z } from "zod";
 
-// DID format validation (did:plc:* or did:web:*)
-const didSchema = z
-  .string()
-  .regex(/^did:(plc|web):[a-z0-9.-]+$/, "Invalid DID format");
-
-// Handle format validation (@handle or handle)
-const handleSchema = z
-  .string()
-  .regex(/^@?[a-zA-Z0-9.-]+$/, "Invalid handle format");
+// DID format validation: did:plc:<id> or did:web:<host>, where the host
+// may carry a percent-encoded port (did:web:localhost%3A8080)
+export const DID_PATTERN =
+  /^did:(plc:[a-z0-9]+|web:[a-zA-Z0-9.-]+(%3[aA][0-9]+)?)$/;
+const didSchema = z.string().regex(DID_PATTERN, "Invalid DID format");
 
 // Cursor validation (microseconds timestamp)
 const cursorSchema = z.number().int().positive();
@@ -20,10 +16,6 @@ const cursorSchema = z.number().int().positive();
 // Common query parameters
 export const didParamSchema = z.object({
   did: didSchema,
-});
-
-export const userDidParamSchema = z.object({
-  user_did: didSchema,
 });
 
 // Changes endpoints (keyset pagination: `before` is the oldest id already seen)
@@ -44,20 +36,6 @@ export const bubbleQuerySchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-});
-
-// Monitoring endpoints
-export const enableMonitoringBodySchema = z.object({
-  user_did: didSchema,
-  follows: z
-    .array(
-      z.object({
-        did: didSchema,
-        handle: handleSchema,
-        rkey: z.string().optional(),
-      }),
-    )
-    .min(1, "At least one follow is required"),
 });
 
 // Admin endpoints
