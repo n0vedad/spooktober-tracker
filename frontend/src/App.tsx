@@ -183,9 +183,9 @@ const App = () => {
         }}
       />
       <div class="flex min-h-screen flex-col text-slate-900 dark:text-slate-100">
-        <main class="flex-1">
-          <div class="m-5 flex flex-col items-center">
-            <div class="w-full max-w-2xl px-4">
+        <main class="flex flex-1 flex-col">
+          <div class="m-5 flex flex-1 flex-col items-center">
+            <div class="flex w-full max-w-2xl flex-1 flex-col px-4">
               <div class="mb-2 flex items-center">
                 <div class="basis-1/3">
                   <div
@@ -230,114 +230,117 @@ const App = () => {
                   </Show>
                 </div>
               </div>
-              <div class="mb-4 flex flex-col items-center">
-                <Show when={!login.me() && !login.checking()}>
-                  <form
-                    class="flex w-full max-w-md flex-col px-4"
-                    onsubmit={(e) => {
-                      e.preventDefault();
-                      login.loginBsky(login.loginInput());
-                    }}
-                  >
-                    <label for="handle" class="ml-0.5 text-sm">
-                      {t("login.handle")}
-                    </label>
-                    <HandleTypeahead
-                      value={login.loginInput()}
-                      onInput={login.setLoginInput}
-                    />
-                    <button
-                      type="submit"
-                      class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
+              {/* Content, vertically centered between header and footer */}
+              <div class="flex flex-1 flex-col justify-center">
+                <div class="mb-4 flex flex-col items-center">
+                  <Show when={!login.me() && !login.checking()}>
+                    <form
+                      class="flex w-full max-w-md flex-col px-4"
+                      onsubmit={(e) => {
+                        e.preventDefault();
+                        login.loginBsky(login.loginInput());
+                      }}
                     >
-                      {t("login.button")}
-                    </button>
-                  </form>
+                      <label for="handle" class="ml-0.5 text-sm">
+                        {t("login.handle")}
+                      </label>
+                      <HandleTypeahead
+                        value={login.loginInput()}
+                        onInput={login.setLoginInput}
+                      />
+                      <button
+                        type="submit"
+                        class="w-full rounded-lg bg-blue-600 py-3 text-base font-bold text-slate-100 hover:bg-blue-700 active:bg-blue-800"
+                      >
+                        {t("login.button")}
+                      </button>
+                    </form>
 
-                  {(() => {
-                    const current = login.notice();
-                    if (!current) return null;
+                    {(() => {
+                      const current = login.notice();
+                      if (!current) return null;
 
-                    const isInfo = current.tone === "info";
-                    const base =
-                      "mx-4 mt-3 max-w-2xl rounded-lg border px-3 py-2 text-sm font-medium text-center";
-                    const info =
-                      " border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200";
-                    const error =
-                      " border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200";
+                      const isInfo = current.tone === "info";
+                      const base =
+                        "mx-4 mt-3 max-w-2xl rounded-lg border px-3 py-2 text-sm font-medium text-center";
+                      const info =
+                        " border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200";
+                      const error =
+                        " border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200";
 
-                    return (
-                      <div class={base + (isInfo ? info : error)}>
-                        {t(current.key)}
-                      </div>
-                    );
-                  })()}
+                      return (
+                        <div class={base + (isInfo ? info : error)}>
+                          {t(current.key)}
+                        </div>
+                      );
+                    })()}
 
-                  {/* Login Info Note */}
-                  <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
-                    <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
-                      {t("login.howTitle")}
-                    </h4>
-                    <p class="text-xs text-blue-900 sm:text-sm dark:text-blue-200">
-                      {t("login.howText")}
-                    </p>
-                  </div>
-
-                  {/* FAQ */}
-                  <div class="mx-4 mt-3 max-w-2xl rounded-lg border border-purple-300 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/30">
-                    <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
-                      {t("faq.title")}
-                    </h4>
-                    <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
-                      <For each={["what", "how", "data", "remove"] as const}>
-                        {(topic) => (
-                          <p>
-                            <strong>{t(`faq.${topic}Q`)}</strong>
-                            <br />
-                            {t(`faq.${topic}A`)}
-                          </p>
-                        )}
-                      </For>
+                    {/* Login Info Note */}
+                    <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
+                      <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
+                        {t("login.howTitle")}
+                      </h4>
+                      <p class="text-xs text-blue-900 sm:text-sm dark:text-blue-200">
+                        {t("login.howText")}
+                      </p>
                     </div>
-                  </div>
-                </Show>
-                <Show when={login.me()?.handle}>
-                  <div class="mb-4 text-center text-sm sm:text-base">
-                    {t("login.loggedInAs", {
-                      handle: login.me()?.handle ?? "",
-                    })}
-                  </div>
-                </Show>
-                <Show when={login.checking()}>
-                  <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
-                    {t("login.loading")}
+
+                    {/* FAQ */}
+                    <div class="mx-4 mt-3 max-w-2xl rounded-lg border border-purple-300 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/30">
+                      <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
+                        {t("faq.title")}
+                      </h4>
+                      <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
+                        <For each={["what", "how", "data", "remove"] as const}>
+                          {(topic) => (
+                            <p>
+                              <strong>{t(`faq.${topic}Q`)}</strong>
+                              <br />
+                              {t(`faq.${topic}A`)}
+                            </p>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={login.me()?.handle}>
+                    <div class="mb-4 text-center text-sm sm:text-base">
+                      {t("login.loggedInAs", {
+                        handle: login.me()?.handle ?? "",
+                      })}
+                    </div>
+                  </Show>
+                  <Show when={login.checking()}>
+                    <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
+                      {t("login.loading")}
+                    </div>
+                  </Show>
+                </div>
+
+                <Show when={login.me()}>
+                  <div class="flex flex-col items-center">
+                    {/* Labeler opt-in hint or confirmation */}
+                    <LabelerOptIn />
+
+                    {/* Admin Panel */}
+                    <Show when={login.me()?.isAdmin}>
+                      <AdminPanel />
+                    </Show>
+
+                    <Show when={fetch.loading()}>
+                      <div class="m-3">{t("follows.loading")}</div>
+                    </Show>
+
+                    {/* Spooktober Tracker */}
+                    <Show when={fetch.loaded() && !fetch.loading()}>
+                      <SpooktoberTracker
+                        follows={fetch.follows()}
+                        onLogout={login.logoutBsky}
+                      />
+                    </Show>
                   </div>
                 </Show>
               </div>
-
-              <Show when={login.me()}>
-                <div class="flex flex-col items-center">
-                  {/* Labeler opt-in hint or confirmation */}
-                  <LabelerOptIn />
-
-                  {/* Admin Panel */}
-                  <Show when={login.me()?.isAdmin}>
-                    <AdminPanel />
-                  </Show>
-
-                  <Show when={fetch.loading()}>
-                    <div class="m-3">{t("follows.loading")}</div>
-                  </Show>
-
-                  {/* Spooktober Tracker */}
-                  <Show when={fetch.loaded() && !fetch.loading()}>
-                    <SpooktoberTracker
-                      follows={fetch.follows()}
-                      onLogout={login.logoutBsky}
-                    />
-                  </Show>
-                </div>
-              </Show>
             </div>
             {/* Close outer content wrapper */}
           </div>
