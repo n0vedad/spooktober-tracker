@@ -11,6 +11,8 @@
  * `changed_at` is an ISO-8601 timestamp of observation.
  */
 export interface ProfileChange {
+  /** Row id; increases with every recorded change */
+  id: number;
   did: string;
   handle: string | null;
   old_handle: string | null;
@@ -42,19 +44,4 @@ export interface APIResponse<T> {
  */
 export interface GetChangesResponse {
   changes: ProfileChange[];
-}
-
-/**
- * Request body to submit a profile-change record.
- * Only include fields that changed; `did` is required.
- */
-export interface SubmitChangeRequest {
-  did: string;
-  handle?: string;
-  old_handle?: string;
-  new_handle?: string;
-  old_display_name?: string;
-  new_display_name?: string;
-  old_avatar?: string;
-  new_avatar?: string;
 }
