@@ -15,9 +15,14 @@ import { tierEmoji } from "./utils/tiers";
 export const avatarUrl = (did: string, cid: string) =>
   `https://cdn.bsky.app/img/avatar/plain/${did}/${cid}@jpeg`;
 
+// Avatar URLs that failed to load. Kept across re-renders (the list refresh
+// recreates the cards), so a gone avatar doesn't flash its alt text again.
+const failedAvatars = new Set<string>();
+
 /**
- * One avatar, or a placeholder when there is none or it can't be loaded
- * (old blobs disappear from the CDN after a while).
+ * One avatar, or a placeholder when there is none or it can't be loaded.
+ * The PDS deletes a replaced avatar right away; the CDN keeps serving it only
+ * while it is still cached (up to 7 days).
  */
 const Avatar = (props: {
   did: string;
@@ -25,7 +30,10 @@ const Avatar = (props: {
   alt: string;
   faded?: boolean;
 }) => {
-  const [failed, setFailed] = createSignal(false);
+  const url = () => (props.cid ? avatarUrl(props.did, props.cid) : null);
+  const [failed, setFailed] = createSignal(
+    url() !== null && failedAvatars.has(url()!),
+  );
   const placeholder = (text: string) => (
     <div
       class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-300 text-center text-[10px] leading-tight text-gray-500 dark:border-gray-600"
@@ -42,8 +50,12 @@ const Avatar = (props: {
             src={avatarUrl(props.did, cid())}
             alt={props.alt}
             loading="lazy"
-            onError={() => setFailed(true)}
-            class={`h-14 w-14 shrink-0 rounded-full border-2 object-cover ${
+            onError={() => {
+              failedAvatars.add(avatarUrl(props.did, cid()));
+              setFailed(true);
+            }}
+            // Transparent text: no alt text flashes up while loading
+            class={`h-14 w-14 shrink-0 rounded-full border-2 object-cover text-transparent ${
               props.faded
                 ? "border-gray-300 opacity-50 grayscale dark:border-gray-600"
                 : "border-orange-400"

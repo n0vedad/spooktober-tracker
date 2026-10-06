@@ -62,6 +62,18 @@ describe("ChangeCard", () => {
     expect(screen.queryByAltText("Previous avatar")).not.toBeInTheDocument();
   });
 
+  it("remembers gone avatars when the card is rendered again", () => {
+    const gone = change({ old_avatar: "bafygone", new_avatar: "bafynew" });
+    const first = renderCard(gone);
+    fireEvent.error(screen.getByAltText("Previous avatar"));
+    first.unmount();
+
+    renderCard(gone);
+
+    expect(screen.queryByAltText("Previous avatar")).not.toBeInTheDocument();
+    expect(screen.getByText("no longer available")).toBeInTheDocument();
+  });
+
   it("marks a removed avatar", () => {
     renderCard(change({ old_avatar: "bafyold", new_avatar: null }));
     expect(screen.getByText("no avatar")).toBeInTheDocument();
