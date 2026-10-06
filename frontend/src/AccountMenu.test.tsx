@@ -52,7 +52,7 @@ describe("AccountMenu", () => {
     );
     expect(purge).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText("Yes, delete all my data"));
+    fireEvent.click(screen.getByText("Yes, delete for good"));
 
     await vi.waitFor(() => expect(onLogout).toHaveBeenCalled());
     expect(purge).toHaveBeenCalledOnce();

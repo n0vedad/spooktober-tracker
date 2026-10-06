@@ -20,7 +20,7 @@ export const LABEL_DEFINITIONS = [
       {
         lang: "de",
         name: "🎃 Gruseliger Name",
-        description: "Hat diesen Spooktober den Anzeigenamen geändert.",
+        description: "Hat im Spooktober den Anzeigenamen geändert.",
       },
     ],
   },
@@ -35,7 +35,7 @@ export const LABEL_DEFINITIONS = [
       {
         lang: "de",
         name: "🎃 Gruseliges Profilbild",
-        description: "Hat diesen Spooktober das Profilbild geändert.",
+        description: "Hat im Spooktober das Profilbild geändert.",
       },
     ],
   },
@@ -50,7 +50,7 @@ export const LABEL_DEFINITIONS = [
       {
         lang: "de",
         name: "🎃 Gruseliger Handle",
-        description: "Hat diesen Spooktober den Handle geändert.",
+        description: "Hat im Spooktober den Handle geändert.",
       },
     ],
   },

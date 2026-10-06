@@ -108,11 +108,9 @@ describe("ChangeCard", () => {
 
 describe("i18n", () => {
   it("fills placeholders and remembers the language", () => {
-    expect(t("tracker.heading", { count: 3 })).toBe("🎃 Detected Changes (3)");
+    expect(t("tracker.heading", { count: 3 })).toBe("🎃 Changes (3)");
     setLang("de");
-    expect(t("tracker.heading", { count: 3 })).toBe(
-      "🎃 Erkannte Änderungen (3)",
-    );
+    expect(t("tracker.heading", { count: 3 })).toBe("🎃 Änderungen (3)");
     expect(localStorage.getItem("lang")).toBe("de");
     expect(document.documentElement.lang).toBe("de");
   });

@@ -91,7 +91,7 @@ export const HandleTypeahead = (props: Props) => {
       <input
         type="text"
         id="handle"
-        placeholder="user.bsky.social"
+        placeholder="handle.example.com"
         autocomplete="off"
         autocapitalize="off"
         spellcheck={false}

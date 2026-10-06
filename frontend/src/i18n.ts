@@ -19,65 +19,67 @@ const en = {
   "login.handle": "Handle",
   "login.button": "Login",
   "login.enterHandle": "Please enter your handle.",
-  "login.redirecting": "Redirecting to Bluesky...",
+  "login.redirecting": "Redirecting you to sign in...",
   "login.loggedInAs": "Logged in as",
-  "login.serverDown": "Could not reach the server. Please try again later.",
+  "login.serverDown":
+    "The server isn't responding right now. Please try again later.",
   "login.logoutFailed":
-    "Logout failed on the server; you are logged out locally.",
+    "Logging out on the server didn't work, but you are logged out in this browser.",
   "login.error.resolve_failed":
-    "Could not find that account. Check the handle and try again.",
-  "login.error.denied": "Login was cancelled.",
-  "login.error.callback_failed": "Login failed. Please try again.",
-  "login.error.session_failed": "Login failed on our side. Please try again.",
-  "login.error.unknown": "Login failed.",
-  "login.howTitle": "ℹ️ How to Login",
+    "We couldn't find an account for this handle. Is it spelled correctly?",
+  "login.error.denied": "You cancelled the login.",
+  "login.error.callback_failed": "Login didn't work. Please try again.",
+  "login.error.session_failed":
+    "Something went wrong on our side. Please try again.",
+  "login.error.unknown": "Login didn't work.",
+  "login.howTitle": "ℹ️ How logging in works",
   "login.howText":
-    'Enter your Bluesky handle and click "Login". You\'ll be redirected to your Bluesky server to confirm. Your password never touches this site, and we only ask for proof of who you are - no permission to post or change anything.',
+    "Enter your handle and click \"Login\". You'll be sent to your provider - the server your account lives on - to confirm. You only type your password there, never here. We only learn who you are; we can't post or change anything for you.",
 
   "faq.title": "❓ FAQ",
   "faq.whatQ": "What is Spooktober Tracker?",
   "faq.whatA":
-    "A community tool that shows Bluesky profile changes during spooky season (October): new handles, display names and avatars - so you can see who's getting spooky! 🎃",
+    "A community project for spooky season: throughout October it shows you who on ATProto changes their handle, display name or avatar - so you can see who's getting spooky! 🎃",
   "faq.howQ": "How does it work?",
   "faq.howA":
-    "Our server watches public profile updates across the whole network in real time via Bluesky's Jetstream. You don't need to enable anything or keep this page open. After logging in you see the changes of the accounts you follow and of your wider network.",
-  "faq.dataQ": "What data is collected?",
+    "Our server reads all public profile changes across the network around the clock. You don't need to switch anything on or keep this page open. After logging in you see the changes of the accounts you follow - and, if you like, of your wider network.",
+  "faq.dataQ": "What data is stored?",
   "faq.dataA":
-    "Only publicly visible profile data: handles, display names and avatar references. We never store passwords, private posts or OAuth tokens. Bots and brand-new accounts setting up their profile are filtered out.",
+    "Only what is public anyway: handles, display names and avatars. We never store passwords, private messages or login tokens. Bots and brand-new accounts still setting up their profile are filtered out.",
   "faq.removeQ": "Can I remove my data?",
   "faq.removeA":
-    'Yes. After logging in, click your avatar at the top right and choose "Delete all my data" to remove your own profile change history.',
+    'Yes. After logging in, click your avatar at the top right and choose "Delete all my data". This removes your own change history.',
 
-  "tracker.heading": "🎃 Detected Changes ({count})",
-  "tracker.loadMore": "Load more ({count} remaining)",
+  "tracker.heading": "🎃 Changes ({count})",
+  "tracker.loadMore": "Show more ({count} left)",
   "tracker.newest": "🕒 Newest first",
   "tracker.closest": "🫂 Closest first",
   "tracker.updatedAgo": "Updated {ago} ago",
   "tracker.updatedJustNow": "Updated just now",
   "tracker.empty":
-    "No changes here yet. The whole network is tracked 24/7 - check back later!",
+    "Nothing has changed here yet. We keep watching around the clock - check back later!",
   "tracker.disconnected":
-    "⚠️ Server disconnected. Unable to check for changes.",
+    "⚠️ No connection to the server - new changes can't be loaded right now.",
   "tracker.connectionLost":
-    "Connection lost. Please check your internet connection and refresh the page.",
+    "Connection lost. Check your internet connection and reload the page.",
   "account.menu": "Account menu",
   "account.logout": "Logout",
   "account.delete": "Delete all my data",
-  "account.deleteTitle": "⚠️ Delete all your data?",
+  "account.deleteTitle": "⚠️ Really delete all your data?",
   "account.deleteText":
-    "This removes your own profile change history from the community database and logs you out. This action cannot be undone.",
-  "account.deleteConfirm": "Yes, delete all my data",
+    "Your own change history will be deleted for good and you'll be logged out.",
+  "account.deleteConfirm": "Yes, delete for good",
   "account.deleting": "Deleting...",
   "account.cancel": "Cancel",
-  "account.deleted": "Deleted your data ({count} changes)",
-  "account.deleteFailed": "Failed to delete your data",
+  "account.deleted": "Your data has been deleted ({count} changes)",
+  "account.deleteFailed": "Deleting didn't work",
 
   "bubble.computing":
     "👻 Mapping your bubble… {done} / {total} follows checked",
   "bubble.waiting":
-    "Your changes appear as soon as your bubble is mapped. This takes a moment once after logging in.",
+    "The changes from your network show up here as soon as this is done. It only takes a while the first time.",
   "bubble.failed":
-    "Could not map your bubble right now - showing your follows only.",
+    "Your bubble couldn't be mapped right now - you only see your follows for the time being.",
 
   "tier.follows": "Follows",
   "tier.follows.hint": "Accounts you follow",
@@ -99,23 +101,24 @@ const en = {
   "change.followedBy": "followed by {count} of your follows",
   "change.history": "Change history",
 
-  "optin.title": "🎃 Get your own Spooktober labels",
+  "optin.title": "🎃 Get your Spooktober labels",
   "optin.textBefore":
-    "Your profile changes are only labeled if you agree: like or follow",
+    "Your profile changes only get a label if you agree. Just like or follow",
   "optin.textAfter":
-    "on Bluesky. Subscribe to it as well to see the labels everywhere.",
+    "to opt in. Subscribe to it as well to see the labels everywhere.",
   "optin.theLabeler": "the labeler",
-  "optin.open": "Open the labeler on Bluesky",
+  "optin.open": "Open the labeler's profile",
   "optin.check": "Done - check again",
   "optin.checking": "Checking...",
   "optin.notFound":
     "No like or follow found yet - it can take a moment to show up.",
-  "optin.checkFailed": "Check failed",
+  "optin.checkFailed": "Checking didn't work",
   "optin.confirmed": "✅ You get Spooktober labels, because {via}.",
   "optin.via.like": "you like the labeler",
   "optin.via.follow": "you follow the labeler",
   "optin.via.like+follow": "you like and follow the labeler",
-  "optin.remove": "Unlike and unfollow {labeler} to remove them.",
+  "optin.remove":
+    "Don't want them anymore? Just unlike and unfollow {labeler}.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -129,76 +132,76 @@ const de: Record<MessageKey, string> = {
   "login.handle": "Handle",
   "login.button": "Login",
   "login.enterHandle": "Bitte gib deinen Handle ein.",
-  "login.redirecting": "Weiterleitung zu Bluesky…",
+  "login.redirecting": "Du wirst zur Anmeldung weitergeleitet…",
   "login.loggedInAs": "Angemeldet als",
   "login.serverDown":
-    "Der Server ist nicht erreichbar. Bitte versuch es später noch einmal.",
+    "Der Server antwortet gerade nicht. Versuch es bitte später noch mal.",
   "login.logoutFailed":
-    "Abmelden auf dem Server fehlgeschlagen; lokal bist du abgemeldet.",
+    "Auf dem Server hat das Abmelden nicht geklappt, in diesem Browser bist du aber abgemeldet.",
   "login.error.resolve_failed":
-    "Account nicht gefunden. Prüf den Handle und versuch es noch einmal.",
-  "login.error.denied": "Anmeldung abgebrochen.",
+    "Zu diesem Handle haben wir keinen Account gefunden. Ist er richtig geschrieben?",
+  "login.error.denied": "Du hast die Anmeldung abgebrochen.",
   "login.error.callback_failed":
-    "Anmeldung fehlgeschlagen. Bitte versuch es noch einmal.",
+    "Die Anmeldung hat nicht geklappt. Versuch es bitte noch mal.",
   "login.error.session_failed":
-    "Anmeldung bei uns fehlgeschlagen. Bitte versuch es noch einmal.",
-  "login.error.unknown": "Anmeldung fehlgeschlagen.",
-  "login.howTitle": "ℹ️ So meldest du dich an",
+    "Bei uns ist etwas schiefgegangen. Versuch es bitte noch mal.",
+  "login.error.unknown": "Die Anmeldung hat nicht geklappt.",
+  "login.howTitle": "ℹ️ So funktioniert die Anmeldung",
   "login.howText":
-    "Gib deinen Bluesky-Handle ein und klick auf „Login“. Du wirst zu deinem Bluesky-Server weitergeleitet und bestätigst dort. Dein Passwort berührt diese Seite nie, und wir fragen nur nach dem Nachweis, wer du bist - ohne Recht, etwas zu posten oder zu ändern.",
+    "Gib deinen Handle ein und klick auf „Login“. Du landest bei deinem Anbieter – dem Server, auf dem dein Account liegt – und bestätigst dort. Dein Passwort gibst du nur dort ein, nie hier. Wir erfahren nur, wer du bist; posten oder etwas ändern können wir in deinem Namen nicht.",
 
-  "faq.title": "❓ FAQ",
+  "faq.title": "❓ Häufige Fragen",
   "faq.whatQ": "Was ist der Spooktober Tracker?",
   "faq.whatA":
-    "Ein Community-Tool, das Bluesky-Profiländerungen in der Gruselsaison (Oktober) zeigt: neue Handles, Anzeigenamen und Profilbilder - damit du siehst, wer gerade spooky wird! 🎃",
+    "Ein Community-Projekt für die Gruselzeit: Den ganzen Oktober über zeigt es dir, wer im ATProto-Netzwerk Handle, Anzeigenamen oder Profilbild ändert – so siehst du, wer sich gerade für Halloween verkleidet! 🎃",
   "faq.howQ": "Wie funktioniert das?",
   "faq.howA":
-    "Unser Server verfolgt öffentliche Profiländerungen im ganzen Netzwerk in Echtzeit über Blueskys Jetstream. Du musst nichts einschalten und die Seite nicht offen lassen. Nach dem Login siehst du die Änderungen der Accounts, denen du folgst, und deines weiteren Umfelds.",
-  "faq.dataQ": "Welche Daten werden erfasst?",
+    "Unser Server liest rund um die Uhr alle öffentlichen Profiländerungen im Netzwerk mit. Du musst dafür nichts einschalten und die Seite auch nicht offen lassen. Nach dem Login siehst du die Änderungen der Accounts, denen du folgst – und auf Wunsch auch die aus deinem weiteren Umfeld.",
+  "faq.dataQ": "Welche Daten werden gespeichert?",
   "faq.dataA":
-    "Nur öffentlich sichtbare Profildaten: Handles, Anzeigenamen und Verweise auf Profilbilder. Wir speichern nie Passwörter, private Posts oder OAuth-Tokens. Bots und brandneue Accounts, die gerade ihr Profil einrichten, werden herausgefiltert.",
+    "Nur, was ohnehin öffentlich ist: Handles, Anzeigenamen und Profilbilder. Passwörter, private Nachrichten oder Zugangsschlüssel speichern wir nie. Bots und frisch angelegte Accounts, die gerade noch ihr Profil einrichten, filtern wir heraus.",
   "faq.removeQ": "Kann ich meine Daten löschen?",
   "faq.removeA":
-    "Ja. Klick nach dem Login oben rechts auf deinen Avatar und wähle „Alle meine Daten löschen“, um deinen eigenen Änderungsverlauf zu entfernen.",
+    "Ja. Klick nach dem Login oben rechts auf dein Profilbild und wähle „Alle meine Daten löschen“. Damit verschwindet dein eigener Änderungsverlauf.",
 
-  "tracker.heading": "🎃 Erkannte Änderungen ({count})",
-  "tracker.loadMore": "Mehr laden (noch {count})",
+  "tracker.heading": "🎃 Änderungen ({count})",
+  "tracker.loadMore": "Mehr anzeigen (noch {count})",
   "tracker.newest": "🕒 Neueste zuerst",
-  "tracker.closest": "🫂 Nächste zuerst",
+  "tracker.closest": "🫂 Engste Kontakte zuerst",
   "tracker.updatedAgo": "Aktualisiert vor {ago}",
   "tracker.updatedJustNow": "Gerade aktualisiert",
   "tracker.empty":
-    "Hier gibt es noch keine Änderungen. Das ganze Netzwerk wird rund um die Uhr verfolgt - schau später wieder vorbei!",
+    "Hier hat sich noch nichts getan. Wir schauen rund um die Uhr hin – komm einfach später noch mal vorbei!",
   "tracker.disconnected":
-    "⚠️ Keine Verbindung zum Server. Änderungen können nicht geprüft werden.",
+    "⚠️ Keine Verbindung zum Server – neue Änderungen lassen sich gerade nicht laden.",
   "tracker.connectionLost":
-    "Verbindung verloren. Prüf deine Internetverbindung und lade die Seite neu.",
+    "Die Verbindung ist weg. Prüf deine Internetverbindung und lade die Seite neu.",
   "account.menu": "Kontomenü",
   "account.logout": "Abmelden",
   "account.delete": "Alle meine Daten löschen",
-  "account.deleteTitle": "⚠️ Alle deine Daten löschen?",
+  "account.deleteTitle": "⚠️ Wirklich alle Daten löschen?",
   "account.deleteText":
-    "Das entfernt deinen eigenen Änderungsverlauf aus der Community-Datenbank und meldet dich ab. Das lässt sich nicht rückgängig machen.",
-  "account.deleteConfirm": "Ja, alle meine Daten löschen",
+    "Dein eigener Änderungsverlauf wird endgültig gelöscht und du wirst abgemeldet.",
+  "account.deleteConfirm": "Ja, endgültig löschen",
   "account.deleting": "Wird gelöscht…",
   "account.cancel": "Abbrechen",
-  "account.deleted": "Deine Daten wurden gelöscht ({count} Änderungen)",
-  "account.deleteFailed": "Löschen fehlgeschlagen",
+  "account.deleted": "Deine Daten sind gelöscht ({count} Änderungen)",
+  "account.deleteFailed": "Das Löschen hat nicht geklappt",
 
   "bubble.computing":
-    "👻 Deine Bubble wird vermessen… {done} / {total} Follows geprüft",
+    "👻 Wir vermessen deine Bubble… {done} von {total} Follows geprüft",
   "bubble.waiting":
-    "Deine Änderungen erscheinen, sobald deine Bubble vermessen ist. Das dauert nach dem Login einmalig einen Moment.",
+    "Sobald das fertig ist, erscheinen hier die Änderungen aus deinem Umfeld. Das dauert nur beim ersten Mal etwas.",
   "bubble.failed":
-    "Deine Bubble konnte gerade nicht vermessen werden - du siehst nur deine Follows.",
+    "Deine Bubble ließ sich gerade nicht vermessen – du siehst vorerst nur deine Follows.",
 
   "tier.follows": "Follows",
   "tier.follows.hint": "Accounts, denen du folgst",
   "tier.inner": "Enger Kreis",
-  "tier.inner.hint": "Vielen deiner Follows folgen ihnen",
+  "tier.inner.hint": "Viele deiner Follows folgen ihnen",
   "tier.bubble": "Bubble",
   "tier.bubble.hint": "Mindestens 3 deiner Follows folgen ihnen",
-  "tier.edge": "Rand",
+  "tier.edge": "Umfeld",
   "tier.edge.hint": "Mindestens einer deiner Follows folgt ihnen",
 
   "change.handle": "Handle",
@@ -209,27 +212,27 @@ const de: Record<MessageKey, string> = {
   "change.avatarGone": "nicht mehr verfügbar",
   "change.oldAvatar": "Vorheriges Profilbild",
   "change.newAvatar": "Neues Profilbild",
-  "change.followedBy": "{count} deiner Follows folgen diesem Account",
+  "change.followedBy": "Gemeinsame Follows: {count}",
   "change.history": "Änderungsverlauf",
 
-  "optin.title": "🎃 Hol dir deine eigenen Spooktober-Labels",
+  "optin.title": "🎃 Hol dir deine Spooktober-Labels",
   "optin.textBefore":
-    "Deine Profiländerungen werden nur gelabelt, wenn du zustimmst: Like oder folge",
+    "Deine Profiländerungen bekommen nur ein Label, wenn du zustimmst. Dazu einfach",
   "optin.textAfter":
-    "auf Bluesky. Abonniere ihn zusätzlich, um die Labels überall zu sehen.",
-  "optin.theLabeler": "dem Labeler",
-  "optin.open": "Labeler auf Bluesky öffnen",
-  "optin.check": "Erledigt - nochmal prüfen",
+    "liken oder folgen. Abonnierst du den Labeler außerdem, siehst du die Labels überall.",
+  "optin.theLabeler": "den Labeler",
+  "optin.open": "Zum Profil des Labelers",
+  "optin.check": "Erledigt – noch mal prüfen",
   "optin.checking": "Wird geprüft…",
   "optin.notFound":
-    "Noch kein Like oder Follow gefunden - es kann einen Moment dauern.",
-  "optin.checkFailed": "Prüfung fehlgeschlagen",
+    "Noch kein Like oder Follow gefunden – das kann einen Moment dauern.",
+  "optin.checkFailed": "Das Prüfen hat nicht geklappt",
   "optin.confirmed": "✅ Du bekommst Spooktober-Labels, weil {via}.",
   "optin.via.like": "du den Labeler likest",
   "optin.via.follow": "du dem Labeler folgst",
   "optin.via.like+follow": "du den Labeler likest und ihm folgst",
   "optin.remove":
-    "Nimm Like und Follow bei {labeler} zurück, um sie zu entfernen.",
+    "Willst du sie nicht mehr? Nimm einfach Like und Follow bei {labeler} zurück.",
 };
 
 const MESSAGES: Record<Lang, Record<MessageKey, string>> = { en, de };

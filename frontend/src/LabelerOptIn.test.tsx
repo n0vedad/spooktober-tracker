@@ -16,10 +16,10 @@ describe("LabelerOptIn", () => {
     ));
 
     expect(
-      await screen.findByText("🎃 Get your own Spooktober labels"),
+      await screen.findByText("🎃 Get your Spooktober labels"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open the labeler on Bluesky" }),
+      screen.getByRole("link", { name: "Open the labeler's profile" }),
     ).toHaveAttribute(
       "href",
       "https://bsky.app/profile/spooktober-labeler.test",
