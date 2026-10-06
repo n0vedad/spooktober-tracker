@@ -18,7 +18,6 @@ import {
   getIgnoredUsers,
   getNoisyAccounts,
   getOptIns,
-  getRecommendedStartCursor,
   removeIgnoredUser,
   startJetstream,
   stopJetstream,
@@ -34,6 +33,8 @@ import { showError, showSuccess } from "./utils/toast-helpers";
 
 type Tab = "bots" | "optins" | "ignored";
 
+// Jetstream's cursor lookback: older starts begin at the oldest event
+const LOOKBACK_MS = 36 * 3_600_000;
 // Background refresh of the lists
 const LIST_REFRESH_MS = 30_000;
 // Reconnect delays for the status WebSocket (ms), capped at the last value
@@ -145,18 +146,16 @@ export const AdminPanel = () => {
     }
   };
 
-  const openStart = async () => {
-    try {
-      setStartCursor(String(await getRecommendedStartCursor()));
-    } catch {
-      setStartCursor(String(Date.now() * 1000));
-    }
+  // Empty cursor = continue exactly at the stored one
+  const openStart = () => {
+    setStartCursor("");
     setShowStart(true);
   };
 
   const start = async () => {
-    const cursor = Number(startCursor());
-    if (!Number.isInteger(cursor) || cursor <= 0) {
+    const value = startCursor().trim();
+    const cursor = value === "" ? undefined : Number(value);
+    if (cursor !== undefined && (!Number.isInteger(cursor) || cursor <= 0)) {
       showError("The cursor must be a positive whole number");
       return;
     }
@@ -207,8 +206,12 @@ export const AdminPanel = () => {
 
   // Cursor (unix microseconds) as a readable date, if it is one
   const cursorDate = (value: string) => {
+    if (value.trim() === "") return "continues exactly where it stopped";
     const n = Number(value);
-    return n >= 1e15 ? formatDateTime(n / 1000, "short", "medium") : "-";
+    if (!Number.isInteger(n) || n <= 0) return "-";
+    return n >= 1e15
+      ? formatDateTime(n / 1000, "short", "medium")
+      : `Jetstream seq ${n}`;
   };
 
   return (
@@ -225,7 +228,9 @@ export const AdminPanel = () => {
       <Show when={ingestion()}>
         {(health) => (
           <button
-            onclick={health().running ? stop : openStart}
+            // A function, so the current state decides (JSX handlers are
+            // bound once and would keep calling the first choice)
+            onclick={() => void (health().running ? stop() : openStart())}
             disabled={busy()}
             class={`mt-3 w-full rounded-lg px-4 py-2.5 font-bold text-white disabled:opacity-50 ${
               health().running
@@ -333,6 +338,7 @@ export const AdminPanel = () => {
                 <div class="min-w-0">
                   <AccountName did={user.did} handle={user.handle} />
                   <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {user.self_service ? "deleted own data" : "excluded"} ·
                     since {formatDateTime(user.added_at, "short", "short")}
                   </div>
                 </div>
@@ -354,32 +360,38 @@ export const AdminPanel = () => {
           <div class="w-full max-w-md rounded-lg bg-white p-5 dark:bg-gray-800">
             <h4 class="mb-2 text-lg font-bold">Start ingestion</h4>
             <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
-              Cursor in unix microseconds. The suggestion continues where the
-              ingestion stopped; Jetstream keeps about 36 hours.
+              Leave empty to continue at the stored cursor, without gaps. A
+              unix-microsecond time or a Jetstream seq starts elsewhere.
+              Jetstream keeps 36 hours: an older time starts at the oldest
+              event, a future one starts live.
             </p>
             <input
               type="text"
               value={startCursor()}
+              placeholder="stored cursor"
               onInput={(e) => setStartCursor(e.currentTarget.value)}
               class="w-full rounded border border-gray-300 px-2 py-1.5 font-mono dark:border-gray-600 dark:bg-gray-700"
             />
             <div class="mt-1 text-xs text-gray-500">
               = {cursorDate(startCursor())}
             </div>
-            <div class="mt-2 flex gap-2 text-xs">
-              <button
-                class="underline"
-                onclick={() => setStartCursor(String(Date.now() * 1000))}
-              >
-                now
+            <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <button class="underline" onclick={() => setStartCursor("")}>
+                where it stopped
               </button>
               <button
                 class="underline"
                 onclick={() =>
-                  setStartCursor(String((Date.now() - 24 * 3_600_000) * 1000))
+                  setStartCursor(String((Date.now() - LOOKBACK_MS) * 1000))
                 }
               >
-                24 h ago
+                oldest available (36 h)
+              </button>
+              <button
+                class="underline"
+                onclick={() => setStartCursor(String(Date.now() * 1000))}
+              >
+                now (skips the gap)
               </button>
             </div>
             <div class="mt-4 flex gap-2">

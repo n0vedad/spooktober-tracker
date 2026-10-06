@@ -23,7 +23,6 @@ vi.mock("./api", () => ({
   ]),
   getIgnoredUsers: vi.fn(async () => []),
   unflagNoisyAccount: vi.fn(async () => "Bot flag removed"),
-  getRecommendedStartCursor: vi.fn(),
   startJetstream: vi.fn(),
   stopJetstream: vi.fn(),
   addIgnoredUser: vi.fn(),
@@ -95,6 +94,30 @@ describe("AdminPanel", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "🔴 Stalled · 3 failed attempts",
     );
+  });
+
+  it("offers to start once the ingestion has stopped", async () => {
+    render(() => <AdminPanel />);
+    await screen.findByText("Stop ingestion");
+
+    socket.onmessage?.({
+      data: JSON.stringify({
+        type: "ingestion",
+        data: { ...STATS.ingestion, state: "stopped", running: false },
+      }),
+    });
+    fireEvent.click(await screen.findByText("Start ingestion…"));
+
+    // Empty = continue at the stored cursor
+    expect(
+      await screen.findByText(/continues exactly where it stopped/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await vi.waitFor(() =>
+      expect(api.startJetstream).toHaveBeenCalledWith(undefined),
+    );
+    expect(api.stopJetstream).not.toHaveBeenCalled();
   });
 
   it("lists bots and lets the admin unflag them", async () => {

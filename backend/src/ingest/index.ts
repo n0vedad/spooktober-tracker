@@ -22,6 +22,7 @@ import {
 } from "../utils/handle-resolver.js";
 import { avatarArchive } from "../avatars/index.js";
 import { labeler } from "../labeler/index.js";
+import { withCursorFallback } from "./cursor-fallback.js";
 import { Ingester, PROFILE_COLLECTION, type EventSource } from "./ingester.js";
 import { createProfileTracker } from "./profile-tracker.js";
 
@@ -36,7 +37,7 @@ const CURSOR_KEY = "jetstream_v2_cursor";
  */
 export function createJetstreamSource(url: string): EventSource {
   const jetstream = new Jetstream(url);
-  return ({ cursor, signal }) =>
+  return withCursorFallback(({ cursor, signal }) =>
     jetstream.live({
       collections: [PROFILE_COLLECTION],
       kinds: ["commit", "identity"],
@@ -50,7 +51,8 @@ export function createJetstreamSource(url: string): EventSource {
         onReconnect: (_err, { attempt }) =>
           console.warn(`🔄 Jetstream reconnecting (attempt ${attempt})`),
       }),
-    });
+    }),
+  );
 }
 
 // Singleton ingester shared across the backend

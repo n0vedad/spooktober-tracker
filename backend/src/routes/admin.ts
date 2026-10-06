@@ -111,6 +111,14 @@ router.get("/optins", requireAdmin, async (_req, res) => {
  */
 router.post("/jetstream/stop", requireAdmin, async (_req, res) => {
   try {
+    if (!ingester.status().running) {
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Jetstream is not running",
+      };
+      res.status(409).json(response);
+      return;
+    }
     console.log("🛑 Admin triggered Jetstream stop");
     await ingester.stop();
     const response: APIResponse<{ message: string }> = {
@@ -126,21 +134,6 @@ router.post("/jetstream/stop", requireAdmin, async (_req, res) => {
     };
     res.status(500).json(response);
   }
-});
-
-/**
- * GET /api/admin/jetstream/recommended-cursor
- * Unix-microsecond cursor of the last processed event (or now)
- */
-router.get("/jetstream/recommended-cursor", requireAdmin, (_req, res) => {
-  const { lastEventTime } = ingester.status();
-  const cursor =
-    (lastEventTime ? Date.parse(lastEventTime) : Date.now()) * 1000;
-  const response: APIResponse<{ cursor: number }> = {
-    success: true,
-    data: { cursor },
-  };
-  res.json(response);
 });
 
 /**
@@ -199,7 +192,12 @@ router.get("/ignored-users", requireAdmin, async (req, res) => {
 
     // Return ignored-user records augmented with their latest handle if available.
     const response: APIResponse<
-      { did: string; added_at: string; handle: string | null }[]
+      {
+        did: string;
+        added_at: string;
+        self_service: boolean;
+        handle: string | null;
+      }[]
     > = {
       success: true,
       data: ignoredUsers.map((user) => ({
