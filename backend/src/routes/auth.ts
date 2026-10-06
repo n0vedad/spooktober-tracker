@@ -16,7 +16,7 @@ import {
 import { bubbleService } from "../bubble/index.js";
 import { seedAccounts } from "../ingest/seed.js";
 import { ADMIN_DID, FRONTEND_URL, PUBLIC_URL } from "../config.js";
-import { getSnapshot } from "../db.js";
+import { getIgnoreReason, getSnapshot } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { resolveHandle } from "../utils/handle-resolver.js";
 import { validate } from "../validation/middleware.js";
@@ -117,19 +117,22 @@ router.get("/oauth/callback", async (req, res) => {
   try {
     const token = await createSession(did);
 
-    // Know the user's own profile, so their first change is detected and the
-    // page can show their avatar. Waited for briefly: one AppView request
-    await Promise.race([
-      seedAccounts([did]).catch((error) => {
-        console.warn(`⚠️  Could not seed profile of ${did}:`, error);
-      }),
-      new Promise((resolve) => setTimeout(resolve, SEED_WAIT_MS)),
-    ]);
+    // Accounts that deleted their data stay untracked until they rejoin
+    if ((await getIgnoreReason(did)) === null) {
+      // Know the user's own profile, so their first change is detected and
+      // the page can show their avatar. Waited for briefly: one request
+      await Promise.race([
+        seedAccounts([did]).catch((error) => {
+          console.warn(`⚠️  Could not seed profile of ${did}:`, error);
+        }),
+        new Promise((resolve) => setTimeout(resolve, SEED_WAIT_MS)),
+      ]);
 
-    // Map the user's bubble right away, so it is ready when they look at it
-    bubbleService.ensure(did).catch((error) => {
-      console.error(`❌ Could not start bubble for ${did}:`, error);
-    });
+      // Map the user's bubble right away, so it is ready when they look
+      bubbleService.ensure(did).catch((error) => {
+        console.error(`❌ Could not start bubble for ${did}:`, error);
+      });
+    }
 
     res.cookie(SESSION_COOKIE, token, {
       ...cookieOptions,
@@ -171,9 +174,10 @@ router.post("/api/auth/logout", async (req, res) => {
  */
 router.get("/api/me", requireAuth, async (req, res) => {
   const did = req.did!;
-  const [handle, snapshot] = await Promise.all([
+  const [handle, snapshot, ignored] = await Promise.all([
     resolveHandle(did),
     getSnapshot(did),
+    getIgnoreReason(did),
   ]);
   const response: APIResponse<{
     did: string;
@@ -181,6 +185,8 @@ router.get("/api/me", requireAuth, async (req, res) => {
     // Avatar blob CID from the profile seeded at login
     avatar: string | null;
     isAdmin: boolean;
+    // Not tracked: deleted its own data ("self") or excluded ("admin")
+    paused: "self" | "admin" | null;
   }> = {
     success: true,
     data: {
@@ -188,6 +194,7 @@ router.get("/api/me", requireAuth, async (req, res) => {
       handle,
       avatar: snapshot?.profile_seen ? snapshot.avatar_cid : null,
       isAdmin: did === ADMIN_DID,
+      paused: ignored,
     },
   };
   res.json(response);

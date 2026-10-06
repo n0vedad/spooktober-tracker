@@ -1,9 +1,11 @@
 /**
  * Avatar of the signed-in account in the header. Clicking it opens a small
- * menu with logout and the deletion of one's own data.
+ * menu with logout and the deletion of one's own data, which is confirmed
+ * in a modal dialog over the page.
  */
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { Portal } from "solid-js/web";
 import { purgeMyData, type Me } from "./api";
 import { avatarUrl } from "./ChangeCard";
 import { t } from "./i18n";
@@ -22,14 +24,22 @@ export const AccountMenu = (props: Props) => {
   const [deleting, setDeleting] = createSignal(false);
   const [avatarFailed, setAvatarFailed] = createSignal(false);
   let root: HTMLDivElement | undefined;
+  let cancelButton: HTMLButtonElement | undefined;
 
-  const close = () => {
-    setOpen(false);
-    setConfirmDelete(false);
+  const close = () => setOpen(false);
+
+  const askDelete = () => {
+    close();
+    setConfirmDelete(true);
+    // The harmless choice gets the focus
+    queueMicrotask(() => cancelButton?.focus());
+  };
+  const cancelDelete = () => {
+    if (!deleting()) setConfirmDelete(false);
   };
 
-  // Close on clicks outside the menu and on Escape. The event path is used
-  // because a clicked item may already be replaced (delete -> confirmation).
+  // Close the menu on clicks outside it and on Escape. The dialog only
+  // closes through its cancel button.
   const onDocumentClick = (event: MouseEvent) => {
     if (root && !event.composedPath().includes(root)) close();
   };
@@ -48,11 +58,9 @@ export const AccountMenu = (props: Props) => {
   const deleteAllData = async () => {
     setDeleting(true);
     try {
-      const result = await (props.purge ?? purgeMyData)();
-      showSuccess(t("account.deleted", { count: result.deletedChanges }), {
-        duration: 4000,
-      });
-      close();
+      await (props.purge ?? purgeMyData)();
+      showSuccess(t("account.deleted"), { duration: 4000 });
+      setConfirmDelete(false);
       await props.onLogout();
     } catch (error) {
       console.error(error);
@@ -121,46 +129,56 @@ export const AccountMenu = (props: Props) => {
           >
             {t("account.logout")}
           </button>
-          <Show
-            when={confirmDelete()}
-            fallback={
-              <button
-                role="menuitem"
-                class={`${itemClass} text-red-700 dark:text-red-400`}
-                onclick={() => setConfirmDelete(true)}
-              >
-                {t("account.delete")}
-              </button>
-            }
+          <button
+            role="menuitem"
+            class={`${itemClass} text-red-700 dark:text-red-400`}
+            onclick={askDelete}
           >
-            <div class="m-1 rounded border border-red-400 bg-red-50 p-3 dark:border-red-600 dark:bg-red-900/20">
-              <p class="mb-1 text-sm font-bold text-red-800 dark:text-red-300">
+            {t("account.delete")}
+          </button>
+        </div>
+      </Show>
+
+      <Show when={confirmDelete()}>
+        <Portal>
+          <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-title"
+              class="w-full max-w-md rounded-lg border border-red-400 bg-white p-5 shadow-xl dark:border-red-600 dark:bg-gray-800"
+            >
+              <h3
+                id="delete-title"
+                class="mb-2 text-lg font-bold text-red-800 dark:text-red-300"
+              >
                 {t("account.deleteTitle")}
-              </p>
-              <p class="mb-3 text-xs text-red-700 dark:text-red-400">
+              </h3>
+              <p class="mb-5 text-sm whitespace-pre-line text-gray-700 dark:text-gray-300">
                 {t("account.deleteText")}
               </p>
-              <div class="flex gap-2">
+              <div class="flex flex-col gap-2 sm:flex-row-reverse">
                 <button
                   onclick={deleteAllData}
                   disabled={deleting()}
-                  class="flex-1 cursor-pointer rounded bg-red-700 px-2 py-1.5 text-xs font-bold text-white hover:bg-red-800 disabled:opacity-50"
+                  class="flex-1 cursor-pointer rounded bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800 disabled:opacity-50"
                 >
                   {deleting()
                     ? t("account.deleting")
                     : t("account.deleteConfirm")}
                 </button>
                 <button
-                  onclick={() => setConfirmDelete(false)}
+                  ref={cancelButton}
+                  onclick={cancelDelete}
                   disabled={deleting()}
-                  class="flex-1 cursor-pointer rounded bg-gray-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-gray-700 disabled:opacity-50"
+                  class="flex-1 cursor-pointer rounded bg-gray-600 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50"
                 >
                   {t("account.cancel")}
                 </button>
               </div>
             </div>
-          </Show>
-        </div>
+          </div>
+        </Portal>
       </Show>
     </div>
   );

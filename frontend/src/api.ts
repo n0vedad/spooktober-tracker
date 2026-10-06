@@ -62,6 +62,8 @@ export interface Me {
   // Avatar blob CID, if the profile is known
   avatar: string | null;
   isAdmin: boolean;
+  // Not tracked: deleted its own data ("self") or excluded by the admin
+  paused: "self" | "admin" | null;
 }
 
 /**
@@ -109,7 +111,12 @@ export type BubbleStatus =
       total: number;
       previous: { followsCount: number; computedAt: string } | null;
     }
-  | { state: "failed"; error: string };
+  | {
+      state: "failed";
+      error: string;
+      // Last bubble, still shown when only its refresh failed
+      previous: { followsCount: number; computedAt: string } | null;
+    };
 
 /**
  * Get (and start computing, if missing or stale) the user's bubble.
@@ -126,21 +133,16 @@ export async function getBubbleStatus(refresh = false): Promise<BubbleStatus> {
 }
 
 /**
- * Changes among the user's follows, optionally extended into the bubble.
+ * Changes among the user's follows, optionally extended into the bubble,
+ * newest first.
  *
  * @param scope Farthest tier to include.
- * @param sort Newest first, or closest accounts first.
  * @returns Changes plus the bubble state (null for scope "follows").
  */
 export async function getMyChanges(
   scope: Tier = "follows",
-  sort: "recent" | "closeness" = "recent",
 ): Promise<{ changes: ProfileChange[]; bubble: BubbleStatus | null }> {
-  return request(
-    `/me/changes?scope=${scope}&sort=${sort}`,
-    {},
-    "Failed to fetch changes",
-  );
+  return request(`/me/changes?scope=${scope}`, {}, "Failed to fetch changes");
 }
 
 /**
@@ -162,17 +164,6 @@ export async function getLabelerStatus(): Promise<LabelerStatus> {
 }
 
 /**
- * Check likes/follows of the labeler now (instead of at the next poll).
- */
-export async function refreshLabelerStatus(): Promise<LabelerStatus> {
-  return request<LabelerStatus>(
-    "/me/labeler/refresh",
-    { method: "POST" },
-    "Could not check right now, please try again in a minute",
-  );
-}
-
-/**
  * Get change history for a specific DID.
  *
  * @param did DID whose history will be retrieved.
@@ -188,9 +179,16 @@ export async function getChangeHistory(did: string): Promise<ProfileChange[]> {
 }
 
 /**
- * Delete the signed-in user's own profile changes.
+ * Rejoin after deleting one's data: tracking, labels and bubble resume.
+ */
+export async function resumeTracking(): Promise<void> {
+  await request("/me/resume", { method: "POST" }, "Failed to rejoin");
+}
+
+/**
+ * Delete the signed-in user's data and stop tracking them.
  *
- * @returns Number of deleted change rows.
+ * @returns Number of deleted changes.
  */
 export async function purgeMyData(): Promise<{ deletedChanges: number }> {
   return request<{ message: string; deletedChanges: number }>(
@@ -294,20 +292,6 @@ export async function stopJetstream(): Promise<string> {
 }
 
 /**
- * Get recommended cursor for starting Jetstream (admin only).
- *
- * @returns Recommended cursor timestamp in microseconds.
- */
-export async function getRecommendedStartCursor(): Promise<number> {
-  const data = await request<{ cursor: number }>(
-    "/admin/jetstream/recommended-cursor",
-    {},
-    "Failed to get recommended cursor",
-  );
-  return data.cursor;
-}
-
-/**
  * Start Jetstream ingestion with optional cursor (admin only).
  *
  * @param cursor Optional cursor timestamp in microseconds.
@@ -328,7 +312,13 @@ export async function startJetstream(cursor?: number): Promise<string> {
  * @returns Array of ignored DID records.
  */
 export async function getIgnoredUsers(): Promise<
-  { did: string; added_at: string; handle: string | null }[]
+  {
+    did: string;
+    added_at: string;
+    // true = the account deleted its own data
+    self_service: boolean;
+    handle: string | null;
+  }[]
 > {
   return request("/admin/ignored-users", {}, "Failed to fetch ignored users");
 }

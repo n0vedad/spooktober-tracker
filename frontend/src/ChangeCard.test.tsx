@@ -58,7 +58,7 @@ describe("ChangeCard", () => {
 
     fireEvent.error(screen.getByAltText("Previous avatar"));
 
-    expect(screen.getByText("no longer available")).toBeInTheDocument();
+    expect(screen.getByText(t("change.avatarGone"))).toBeInTheDocument();
     expect(screen.queryByAltText("Previous avatar")).not.toBeInTheDocument();
   });
 
@@ -71,12 +71,12 @@ describe("ChangeCard", () => {
     renderCard(gone);
 
     expect(screen.queryByAltText("Previous avatar")).not.toBeInTheDocument();
-    expect(screen.getByText("no longer available")).toBeInTheDocument();
+    expect(screen.getByText(t("change.avatarGone"))).toBeInTheDocument();
   });
 
   it("marks a removed avatar", () => {
     renderCard(change({ old_avatar: "bafyold", new_avatar: null }));
-    expect(screen.getByText("no avatar")).toBeInTheDocument();
+    expect(screen.getByText(t("change.noAvatar"))).toBeInTheDocument();
   });
 
   it("shows handle changes and how close the account is", () => {
@@ -108,9 +108,14 @@ describe("ChangeCard", () => {
 
 describe("i18n", () => {
   it("fills placeholders and remembers the language", () => {
-    expect(t("tracker.heading", { count: 3 })).toBe("🎃 Changes (3)");
+    const english = t("tracker.heading", { count: 3 });
+    expect(english).toContain("(3)");
+    expect(english).not.toContain("{count}");
+
     setLang("de");
-    expect(t("tracker.heading", { count: 3 })).toBe("🎃 Änderungen (3)");
+
+    expect(t("tracker.heading", { count: 3 })).toContain("(3)");
+    expect(t("tracker.heading", { count: 3 })).not.toBe(english);
     expect(localStorage.getItem("lang")).toBe("de");
     expect(document.documentElement.lang).toBe("de");
   });

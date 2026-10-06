@@ -47,7 +47,12 @@ export type BubbleStatus =
       // Previous bubble stays usable while it is being refreshed
       previous: { followsCount: number; computedAt: string } | null;
     }
-  | { state: "failed"; error: string };
+  | {
+      state: "failed";
+      error: string;
+      // The last bubble stays usable when only its refresh failed
+      previous: { followsCount: number; computedAt: string } | null;
+    };
 
 interface Job {
   done: number;
@@ -159,7 +164,7 @@ export function createBubbleService(deps: BubbleServiceDeps) {
       return { state: "computing", done: job.done, total: job.total, previous };
     }
     if (failures.has(userDid)) {
-      return { state: "failed", error: failures.get(userDid)! };
+      return { state: "failed", error: failures.get(userDid)!, previous };
     }
     return previous ? { state: "ready", ...previous } : null;
   }
@@ -177,7 +182,8 @@ export function createBubbleService(deps: BubbleServiceDeps) {
       const fresh =
         info !== null && Date.now() - info.computedAt.getTime() < maxAgeMs;
 
-      if (force || !fresh) {
+      // A failed run is retried on the next call, even with a fresh bubble
+      if (force || !fresh || failures.has(userDid)) {
         failures.delete(userDid);
         const job: Job = { done: 0, total: 0, promise: Promise.resolve() };
         jobs.set(userDid, job);

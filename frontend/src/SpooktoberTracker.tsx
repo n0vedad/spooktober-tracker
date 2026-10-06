@@ -17,6 +17,7 @@ import {
 import { ChangeCard } from "./ChangeCard";
 import { t } from "./i18n";
 import { Spinner } from "./Spinner";
+import { formatDateTime } from "./utils/date-formatter";
 import { formatDuration } from "./utils/ingestion";
 import { TIER_OPTIONS, tierHint, tierLabel, type Tier } from "./utils/tiers";
 import { showError } from "./utils/toast-helpers";
@@ -53,7 +54,6 @@ export const SpooktoberTracker = () => {
   );
   const [changes, setChanges] = createSignal<ProfileChange[]>([]);
   const [scope, setScope] = createSignal<Tier>("bubble");
-  const [sort, setSort] = createSignal<"recent" | "closeness">("recent");
   const [bubble, setBubble] = createSignal<BubbleStatus | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [disconnected, setDisconnected] = createSignal(false);
@@ -78,7 +78,7 @@ export const SpooktoberTracker = () => {
   const loadChanges = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const result = await getMyChanges(scope(), sort());
+      const result = await getMyChanges(scope());
       setDisconnected(false);
       setBubble(result.bubble);
       if (result.bubble?.state === "computing") startBubblePoll();
@@ -168,12 +168,8 @@ export const SpooktoberTracker = () => {
     bubblePoll = undefined;
   };
 
-  const changeView = async (next: {
-    scope?: Tier;
-    sort?: "recent" | "closeness";
-  }) => {
-    if (next.scope) setScope(next.scope);
-    if (next.sort) setSort(next.sort);
+  const changeScope = async (next: Tier) => {
+    setScope(next);
     setVisibleCount(PAGE_SIZE);
     await loadChanges();
   };
@@ -215,6 +211,11 @@ export const SpooktoberTracker = () => {
       : t("tracker.updatedAgo", { ago: formatDuration(ago) });
   };
 
+  const failed = () => {
+    const status = bubble();
+    return status?.state === "failed" ? status : null;
+  };
+
   const computing = () => {
     const status = bubble();
     return status?.state === "computing" ? status : null;
@@ -238,7 +239,7 @@ export const SpooktoberTracker = () => {
             <For each={TIER_OPTIONS}>
               {(option) => (
                 <button
-                  onclick={() => changeView({ scope: option.tier })}
+                  onclick={() => changeScope(option.tier)}
                   title={tierHint(option.tier)}
                   aria-pressed={scope() === option.tier}
                   class={`rounded-lg border px-2 py-2 text-sm font-semibold ${
@@ -252,30 +253,38 @@ export const SpooktoberTracker = () => {
               )}
             </For>
           </div>
-          <div class="mb-3 flex items-center justify-between gap-2 text-sm">
-            <span class="text-gray-600 dark:text-gray-400">
-              {tierHint(scope())}
-            </span>
-            <button
-              onclick={() =>
-                changeView({
-                  sort: sort() === "recent" ? "closeness" : "recent",
-                })
-              }
-              class="shrink-0 rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
-            >
-              {sort() === "recent" ? t("tracker.newest") : t("tracker.closest")}
-            </button>
-          </div>
+          <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
+            {tierHint(scope())}
+          </p>
 
           {/* Bubble recomputation progress */}
           <Show when={computing()}>
             <BubbleProgress status={computing()} />
           </Show>
-          <Show when={bubble()?.state === "failed"}>
-            <div class="mb-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
-              {t("bubble.failed")}
-            </div>
+          <Show when={failed()}>
+            {(status) => (
+              <Show
+                when={status().previous}
+                fallback={
+                  <div class="mb-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
+                    {t("bubble.failed")}
+                  </div>
+                }
+              >
+                {(previous) => (
+                  // Only the refresh failed: the last bubble is still in use
+                  <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                    {t("bubble.stale", {
+                      date: formatDateTime(
+                        previous().computedAt,
+                        "short",
+                        "short",
+                      ),
+                    })}
+                  </p>
+                )}
+              </Show>
+            )}
           </Show>
 
           <Show

@@ -8,6 +8,7 @@ const ME = {
   handle: "alice.test",
   avatar: "bafyavatar",
   isAdmin: false,
+  paused: null,
 };
 
 describe("AccountMenu", () => {
@@ -41,7 +42,7 @@ describe("AccountMenu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("deletes the data only after confirming, then logs out", async () => {
+  it("deletes the data only after confirming in a dialog, then logs out", async () => {
     const onLogout = vi.fn();
     const purge = vi.fn(async () => ({ deletedChanges: 2 }));
     render(() => <AccountMenu me={ME} onLogout={onLogout} purge={purge} />);
@@ -50,12 +51,38 @@ describe("AccountMenu", () => {
     fireEvent.click(
       screen.getByRole("menuitem", { name: "Delete all my data" }),
     );
+
+    // The menu closes, a modal dialog asks for confirmation
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", {
+      name: "⚠️ Really delete all your data?",
+    });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(purge).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Yes, delete for good"));
 
     await vi.waitFor(() => expect(onLogout).toHaveBeenCalled());
     expect(purge).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes the dialog only through its cancel button", () => {
+    const purge = vi.fn();
+    render(() => <AccountMenu me={ME} onLogout={() => {}} purge={purge} />);
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Delete all my data" }),
+    );
+    const dialog = screen.getByRole("dialog");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(dialog.parentElement!);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(purge).not.toHaveBeenCalled();
   });
 
   it("closes on a click outside", () => {

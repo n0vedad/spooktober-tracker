@@ -15,12 +15,12 @@ export const LABEL_DEFINITIONS = [
       {
         lang: "en",
         name: "🎃 Spooky name",
-        description: "Changed their display name this Spooktober.",
+        description: "Changed their name this Spooktober",
       },
       {
         lang: "de",
-        name: "🎃 Gruseliger Name",
-        description: "Hat im Spooktober den Anzeigenamen geändert.",
+        name: "🎃 Spooky name",
+        description: "Hat im Spooktober den Namen geändert",
       },
     ],
   },
@@ -30,12 +30,12 @@ export const LABEL_DEFINITIONS = [
       {
         lang: "en",
         name: "🎃 Spooky avatar",
-        description: "Changed their avatar this Spooktober.",
+        description: "Changed their avatar this Spooktober",
       },
       {
         lang: "de",
-        name: "🎃 Gruseliges Profilbild",
-        description: "Hat im Spooktober das Profilbild geändert.",
+        name: "🎃 Spooky avatar",
+        description: "Hat im Spooktober das Profilbild geändert",
       },
     ],
   },
@@ -49,8 +49,8 @@ export const LABEL_DEFINITIONS = [
       },
       {
         lang: "de",
-        name: "🎃 Gruseliger Handle",
-        description: "Hat im Spooktober den Handle geändert.",
+        name: "🎃 Spooky handle",
+        description: "Hat im Spooktober den Handle geändert",
       },
     ],
   },
@@ -63,9 +63,9 @@ export const LABEL_DEFINITIONS = [
  * graphemes.
  */
 export const LABELER_DESCRIPTION = [
-  "🎃 Spooktober labels for profile changes in October.",
-  "Like or follow this account to get labeled - unlike/unfollow removes your labels.",
-  "Subscribe to see the labels everywhere. 👻",
+  "🎃 Spooktober labels for profile changes in Spooktober",
+  "Like or follow this account to get labeled - unlike/unfollow removes your labels",
+  "Subscribe to see the labels everywhere 👻",
 ].join("\n");
 
 export type LabelValue = (typeof LABEL_DEFINITIONS)[number]["identifier"];

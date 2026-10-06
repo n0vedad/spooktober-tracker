@@ -43,6 +43,8 @@ export interface NewProfileChange {
 interface IgnoredUserRow {
   did: string;
   added_at: string;
+  // true = the account deleted its own data (it may rejoin by itself)
+  self_service: boolean;
 }
 
 // Pagination options for change listings.
@@ -177,9 +179,10 @@ export async function initDB() {
         user_did TEXT NOT NULL,
         did TEXT NOT NULL,
         common_count INT NOT NULL,
-        score REAL NOT NULL,
         PRIMARY KEY (user_did, did)
       );
+      -- The Adamic-Adar score only ordered the "closest first" view
+      ALTER TABLE bubble_members DROP COLUMN IF EXISTS score;
       CREATE INDEX IF NOT EXISTS idx_bubble_members_common
         ON bubble_members(user_did, common_count);
     `);
@@ -237,6 +240,8 @@ export async function initDB() {
         did TEXT PRIMARY KEY,
         added_at TIMESTAMP DEFAULT NOW()
       );
+      ALTER TABLE ignored_users
+        ADD COLUMN IF NOT EXISTS self_service BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
     // Thumbnails of avatars seen in changes. A PDS deletes a replaced avatar
@@ -511,6 +516,24 @@ export async function seedSnapshots(
 }
 
 /**
+ * Known handles of the given accounts, from their snapshots.
+ *
+ * @param dids Accounts to look up.
+ * @returns Map of DID to handle (accounts without a known handle are absent).
+ */
+export async function getKnownHandles(
+  dids: readonly string[],
+): Promise<Map<string, string>> {
+  if (dids.length === 0) return new Map();
+  const result = await pool.query<{ did: string; handle: string }>(
+    `SELECT did, handle FROM profile_snapshots
+     WHERE did = ANY($1) AND handle IS NOT NULL`,
+    [dids],
+  );
+  return new Map(result.rows.map((row) => [row.did, row.handle]));
+}
+
+/**
  * Accounts among the given ones without a full baseline snapshot.
  *
  * @param dids Accounts to check.
@@ -523,7 +546,8 @@ export async function findMissingBaselines(
   const result = await pool.query<{ did: string }>(
     `SELECT d.did FROM unnest($1::text[]) AS d(did)
      LEFT JOIN profile_snapshots s ON s.did = d.did
-     WHERE s.did IS NULL OR NOT s.profile_seen`,
+     WHERE (s.did IS NULL OR NOT s.profile_seen)
+       AND NOT EXISTS (SELECT 1 FROM ignored_users iu WHERE iu.did = d.did)`,
     [[...new Set(dids)]],
   );
   return result.rows.map((row) => row.did);
@@ -541,7 +565,8 @@ export async function listWatchedAccounts(): Promise<string[]> {
      UNION SELECT did FROM bubble_members
      UNION SELECT unnest(follows) FROM follow_lists
        WHERE did IN (SELECT user_did FROM bubbles)
-     UNION SELECT did FROM labeler_optins`,
+     UNION SELECT did FROM labeler_optins
+     EXCEPT SELECT did FROM ignored_users`,
   );
   return result.rows.map((row) => row.did);
 }
@@ -673,7 +698,9 @@ export async function addIgnoredUser(
 
     // Insert into ignored_users
     await client.query(
-      `INSERT INTO ignored_users (did) VALUES ($1) ON CONFLICT (did) DO NOTHING`,
+      // An admin exclusion overrides a self-service entry (no way back)
+      `INSERT INTO ignored_users (did) VALUES ($1)
+       ON CONFLICT (did) DO UPDATE SET self_service = FALSE`,
       [did],
     );
 
@@ -701,6 +728,40 @@ export async function addIgnoredUser(
 }
 
 /**
+ * Why an account is ignored, if it is.
+ *
+ * @param did - DID to check.
+ * @returns "self" after deleting its own data, "admin" when an admin
+ *   excluded it, or null when it is tracked.
+ */
+export async function getIgnoreReason(
+  did: string,
+): Promise<"self" | "admin" | null> {
+  const result = await pool.query<{ self_service: boolean }>(
+    "SELECT self_service FROM ignored_users WHERE did = $1",
+    [did],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return row.self_service ? "self" : "admin";
+}
+
+/**
+ * Let an account that deleted its own data be tracked again. Exclusions by
+ * an admin stay.
+ *
+ * @param did - DID that wants to rejoin.
+ * @returns true when the account was released.
+ */
+export async function releaseSelfIgnored(did: string): Promise<boolean> {
+  const result = await pool.query(
+    "DELETE FROM ignored_users WHERE did = $1 AND self_service",
+    [did],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
  * Remove DID from ignore list.
  *
  * @param did - DID to unignore.
@@ -711,8 +772,9 @@ export async function removeIgnoredUser(did: string): Promise<void> {
 }
 
 /**
- * Delete everything stored about one account: its changes, snapshot,
- * computed bubble and cached follow list.
+ * Delete everything stored about one account (changes, snapshot, bubble,
+ * follow list, avatar thumbnails, labeler opt-in) and stop tracking it until
+ * it rejoins: the account goes on the ignore list as a self-service entry.
  *
  * @param did - Account DID.
  * @returns Promise resolving with the number of deleted change rows.
@@ -721,6 +783,13 @@ export async function purgeAccount(did: string): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Stop tracking it from now on (kept for an admin exclusion)
+    await client.query(
+      `INSERT INTO ignored_users (did, self_service) VALUES ($1, TRUE)
+       ON CONFLICT (did) DO NOTHING`,
+      [did],
+    );
+    await client.query("DELETE FROM labeler_optins WHERE did = $1", [did]);
     const deleted = await client.query(
       "DELETE FROM profile_changes WHERE did = $1",
       [did],

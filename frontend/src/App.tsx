@@ -12,6 +12,7 @@ import { getMe, logout, startLogin, type LabelerStatus, type Me } from "./api";
 import { HandleTypeahead } from "./HandleTypeahead";
 import { lang, setLang, t, type MessageKey } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
+import { PausedNotice } from "./PausedNotice";
 import { Spinner } from "./Spinner";
 import { SpooktoberTracker } from "./SpooktoberTracker";
 
@@ -93,6 +94,13 @@ const Login = () => {
     }
   };
 
+  /**
+   * Reload the session (e.g. after rejoining).
+   */
+  const reloadMe = async () => {
+    setMe(await getMe());
+  };
+
   // Return states
   return {
     me,
@@ -102,6 +110,7 @@ const Login = () => {
     setLoginInput,
     loginBsky,
     logoutBsky,
+    reloadMe,
   };
 };
 
@@ -219,23 +228,24 @@ const App = () => {
                       </button>
                     </form>
 
-                    {/* Status line: fixed height, so the boxes below never move */}
+                    {/* Status line: fixed height (room for two lines), so the
+                        boxes below never move when a message appears */}
                     <div
-                      class="mx-4 flex h-12 w-full max-w-md items-center justify-center px-4 text-center text-xs font-medium sm:text-sm"
+                      class="mx-4 flex h-16 w-full max-w-md items-center justify-center px-4"
                       role="status"
                       aria-live="polite"
                     >
                       <Show when={login.notice()}>
                         {(current) => (
-                          <span
-                            class={`line-clamp-2 ${
+                          <div
+                            class={`line-clamp-2 w-full rounded-lg border px-3 py-1.5 text-center text-xs font-medium sm:text-sm ${
                               current().tone === "info"
-                                ? "text-emerald-700 dark:text-emerald-300"
-                                : "text-red-700 dark:text-red-400"
+                                ? "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200"
+                                : "border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200"
                             }`}
                           >
                             {t(current().key)}
-                          </span>
+                          </div>
                         )}
                       </Show>
                     </div>
@@ -245,7 +255,7 @@ const App = () => {
                       <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
                         {t("login.howTitle")}
                       </h4>
-                      <p class="text-xs text-blue-900 sm:text-sm dark:text-blue-200">
+                      <p class="text-xs whitespace-pre-line text-blue-900 sm:text-sm dark:text-blue-200">
                         {t("login.howText")}
                       </p>
                     </div>
@@ -255,7 +265,7 @@ const App = () => {
                       <h4 class="mb-2 text-sm font-bold text-purple-800 sm:text-base dark:text-purple-300">
                         {t("faq.title")}
                       </h4>
-                      <div class="space-y-2 text-xs text-purple-900 sm:text-sm dark:text-purple-200">
+                      <div class="space-y-2 text-xs whitespace-pre-line text-purple-900 sm:text-sm dark:text-purple-200">
                         <For each={["what", "how", "data", "remove"] as const}>
                           {(topic) => (
                             <p>
@@ -275,8 +285,22 @@ const App = () => {
 
                 <Show when={login.me()}>
                   <div class="flex flex-col items-center">
-                    {/* Labeler opt-in hint or confirmation */}
-                    <LabelerOptIn onStatus={setLabeler} />
+                    <Show
+                      when={login.me()?.paused}
+                      fallback={
+                        <>
+                          {/* Labeler opt-in hint or confirmation */}
+                          <LabelerOptIn onStatus={setLabeler} />
+                        </>
+                      }
+                    >
+                      {(reason) => (
+                        <PausedNotice
+                          reason={reason()}
+                          onResumed={login.reloadMe}
+                        />
+                      )}
+                    </Show>
 
                     {/* Admin Panel */}
                     <Show when={login.me()?.isAdmin}>
@@ -284,7 +308,7 @@ const App = () => {
                     </Show>
 
                     {/* Spooktober Tracker, once the labeler is subscribed */}
-                    <Show when={labelerActive()}>
+                    <Show when={!login.me()?.paused && labelerActive()}>
                       <SpooktoberTracker />
                     </Show>
                   </div>

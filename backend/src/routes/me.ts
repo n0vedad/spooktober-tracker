@@ -7,9 +7,15 @@ import express from "express";
 import type { APIResponse } from "../../../shared/types.js";
 import { tierOf, tierThresholds, type Tier } from "../bubble/compute.js";
 import { bubbleService } from "../bubble/index.js";
-import type { BubbleStatus } from "../bubble/service.js";
-import { getChangesInScope } from "../bubble/store.js";
-import { purgeAccount } from "../db.js";
+import { BUBBLE_MAX_AGE_MS, type BubbleStatus } from "../bubble/service.js";
+import { getCachedFollowLists, getChangesInScope } from "../bubble/store.js";
+import {
+  getIgnoreReason,
+  getKnownHandles,
+  purgeAccount,
+  releaseSelfIgnored,
+} from "../db.js";
+import { seedAccounts } from "../ingest/seed.js";
 import { labeler, optInSync } from "../labeler/index.js";
 import { getOptIn } from "../labeler/store.js";
 import { resolveHandle } from "../utils/handle-resolver.js";
@@ -29,11 +35,47 @@ const CHANGES_LIMIT = 500;
 router.use(requireAuth);
 
 /**
+ * Accounts the user follows, with their current handles. The follow list
+ * stored with the bubble (refreshed daily) saves the AppView requests; only
+ * before the first bubble is it loaded live.
+ */
+async function followsOf(
+  did: string,
+): Promise<{ did: string; handle: string | null }[]> {
+  const stored = (await getCachedFollowLists([did], BUBBLE_MAX_AGE_MS)).get(
+    did,
+  );
+  if (!stored) return getFollows(did);
+  const handles = await getKnownHandles(stored);
+  return stored
+    .filter((follow) => follow !== did)
+    .map((follow) => ({ did: follow, handle: handles.get(follow) ?? null }));
+}
+
+/**
+ * Accounts that deleted their data (or were excluded) get no bubble and no
+ * changes until they rejoin.
+ */
+const requireTracked: express.RequestHandler = async (req, res, next) => {
+  try {
+    if ((await getIgnoreReason(req.did!)) === null) return next();
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Your account is not tracked",
+    };
+    res.status(403).json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /api/me/bubble?refresh=false
  * State of the user's bubble; starts computing it when missing or stale.
  */
 router.get(
   "/bubble",
+  requireTracked,
   validate(bubbleQuerySchema, "query"),
   async (req, res) => {
     try {
@@ -56,22 +98,20 @@ router.get(
 );
 
 /**
- * GET /api/me/changes?scope=follows|inner|bubble|edge&sort=recent|closeness
+ * GET /api/me/changes?scope=follows|inner|bubble|edge
  * Newest changes among the user's follows, optionally extended into the
  * bubble up to the given tier. While the bubble is still being computed,
  * only the follows (or the previous bubble) are included.
  */
 router.get(
   "/changes",
+  requireTracked,
   validate(scopedChangesQuerySchema, "query"),
   async (req, res) => {
     try {
-      const { scope, sort } = req.query as unknown as {
-        scope: Tier;
-        sort: "recent" | "closeness";
-      };
+      const { scope } = req.query as unknown as { scope: Tier };
       const did = req.did!;
-      const follows = await getFollows(did);
+      const follows = await followsOf(did);
 
       // Bubble members need a computed bubble (current or previous one)
       let bubble: BubbleStatus | null = null;
@@ -79,12 +119,7 @@ router.get(
       let minCommon: number | null = null;
       if (scope !== "follows") {
         bubble = await bubbleService.ensure(did);
-        const info =
-          bubble.state === "ready"
-            ? bubble
-            : bubble.state === "computing"
-              ? bubble.previous
-              : null;
+        const info = bubble.state === "ready" ? bubble : bubble.previous;
         if (info) {
           followsCount = info.followsCount;
           minCommon = tierThresholds(followsCount)[scope];
@@ -95,20 +130,20 @@ router.get(
         did,
         follows.map((f) => f.did),
         minCommon,
-        { limit: CHANGES_LIMIT, sort },
+        { limit: CHANGES_LIMIT },
       );
       // Current handles of follows beat the one stored with the change
-      const handleOf = new Map(follows.map((f) => [f.did, f.handle]));
-      const changes = rows.map(
-        ({ common_count, score: _score, ...change }) => ({
-          ...change,
-          handle: handleOf.get(change.did) ?? change.handle,
-          tier: (common_count === null
-            ? "follows"
-            : tierOf(common_count, followsCount)) as Tier,
-          common_follows: common_count,
-        }),
+      const handleOf = new Map(
+        follows.flatMap((f) => (f.handle ? [[f.did, f.handle] as const] : [])),
       );
+      const changes = rows.map(({ common_count, ...change }) => ({
+        ...change,
+        handle: handleOf.get(change.did) ?? change.handle,
+        tier: (common_count === null
+          ? "follows"
+          : tierOf(common_count, followsCount)) as Tier,
+        common_follows: common_count,
+      }));
 
       const response: APIResponse<{
         changes: typeof changes;
@@ -129,9 +164,6 @@ router.get(
     }
   },
 );
-
-// On-demand opt-in checks run at most this often (across all users)
-const OPT_IN_REFRESH_MIN_AGE_MS = 15_000;
 
 /**
  * Opt-in state of the signed-in user for the labeler.
@@ -176,35 +208,16 @@ router.get("/labeler", async (req, res) => {
 });
 
 /**
- * POST /api/me/labeler/refresh
- * Check likes/follows of the labeler now instead of at the next poll.
- */
-router.post("/labeler/refresh", async (req, res) => {
-  try {
-    await optInSync?.syncIfStale(OPT_IN_REFRESH_MIN_AGE_MS);
-    const response: APIResponse<LabelerStatus> = {
-      success: true,
-      data: await labelerStatus(req.did!),
-    };
-    res.json(response);
-  } catch (error) {
-    console.error("Error refreshing opt-ins:", error);
-    const response: APIResponse<never> = {
-      success: false,
-      error: "Could not check right now, please try again in a minute",
-    };
-    res.status(502).json(response);
-  }
-});
-
-/**
  * DELETE /api/me/data
  * Delete the signed-in user's own profile changes and stored profile state.
  */
 router.delete("/data", async (req, res) => {
   try {
-    const deletedChanges = await purgeAccount(req.did!);
-    invalidateFollows(req.did!);
+    const did = req.did!;
+    const deletedChanges = await purgeAccount(did);
+    invalidateFollows(did);
+    // Labels are public; withdraw them like an opt-out
+    await labeler?.onOptOut(did);
 
     const response: APIResponse<{ message: string; deletedChanges: number }> = {
       success: true,
@@ -216,6 +229,41 @@ router.delete("/data", async (req, res) => {
     const response: APIResponse<never> = {
       success: false,
       error: "Failed to purge user data",
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * POST /api/me/resume
+ * Track an account again after it deleted its own data.
+ */
+router.post("/resume", async (req, res) => {
+  try {
+    const did = req.did!;
+    if (!(await releaseSelfIgnored(did))) {
+      const response: APIResponse<never> = {
+        success: false,
+        error: "Nothing to resume",
+      };
+      res.status(409).json(response);
+      return;
+    }
+    // Same as a first login: know the profile, map the bubble
+    await seedAccounts([did]);
+    bubbleService.ensure(did).catch((error) => {
+      console.error(`❌ Could not start bubble for ${did}:`, error);
+    });
+    const response: APIResponse<{ resumed: true }> = {
+      success: true,
+      data: { resumed: true },
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error resuming account:", error);
+    const response: APIResponse<never> = {
+      success: false,
+      error: "Failed to resume",
     };
     res.status(500).json(response);
   }

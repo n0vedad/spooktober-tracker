@@ -2,6 +2,8 @@ import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDB } from "../test/db-helpers.js";
 import { createApp } from "./app.js";
+import { getFollows } from "./utils/follows.js";
+import { ingester } from "./ingest/index.js";
 import { thumbnailUrl } from "./avatars/archive.js";
 import { saveThumb } from "./avatars/store.js";
 import { oauthClient } from "./auth/oauth.js";
@@ -11,17 +13,19 @@ import {
   getSessionDid,
 } from "./auth/sessions.js";
 import { bubbleService } from "./bubble/index.js";
-import { saveBubble } from "./bubble/store.js";
+import { saveBubble, saveFollowList } from "./bubble/store.js";
 import {
+  addIgnoredUser,
   flagNoisy,
   getChangeHistory,
+  isIgnored,
   pool,
   recordChange,
   saveSnapshot,
 } from "./db.js";
 import { seedAccounts } from "./ingest/seed.js";
-import { optInSync } from "./labeler/index.js";
-import { saveOptIn } from "./labeler/store.js";
+import { labeler, optInSync } from "./labeler/index.js";
+import { getOptIn, saveOptIn } from "./labeler/store.js";
 
 const ALICE = "did:plc:alice";
 const BOB = "did:plc:bob";
@@ -69,18 +73,19 @@ vi.mock("./bubble/index.js", () => ({
 
 // A configured labeler whose opt-in sync can be triggered on demand
 vi.mock("./labeler/index.js", () => ({
-  labeler: { did: "did:plc:labeler" },
-  optInSync: { syncIfStale: vi.fn(async () => {}) },
+  labeler: { did: "did:plc:labeler", onOptOut: vi.fn(async () => []) },
+  optInSync: { sync: vi.fn(async () => {}) },
 }));
 
 // Seeding talks to the public AppView
 vi.mock("./ingest/seed.js", () => ({ seedAccounts: vi.fn(async () => {}) }));
 
 // Keep the real Jetstream client out of route tests
+const ingestion = vi.hoisted(() => ({ running: true }));
 vi.mock("./ingest/index.js", () => ({
   ingester: {
     status: () => ({
-      running: true,
+      running: ingestion.running,
       startedAt: new Date(Date.now() - 5000).toISOString(),
       lastSeq: 42,
       lastEventTime: new Date().toISOString(),
@@ -292,6 +297,29 @@ describe("GET /api/changes", () => {
 });
 
 describe("/api/me", () => {
+  it("uses the follow list stored with the bubble", async () => {
+    await saveFollowList(BOB, [ALICE]);
+    await saveSnapshot({
+      did: ALICE,
+      handle: "alice.now",
+      display_name: "Alice",
+      avatar_cid: null,
+      profile_seen: true,
+    });
+    vi.mocked(getFollows).mockClear();
+
+    const res = await request(app)
+      .get("/api/me/changes")
+      .set("Cookie", await loginAs(BOB))
+      .expect(200);
+
+    expect(getFollows).not.toHaveBeenCalled();
+    expect(res.body.data.changes[0]).toMatchObject({
+      did: ALICE,
+      handle: "alice.now",
+    });
+  });
+
   it("shows the current handle of follows", async () => {
     await recordChange({
       did: ALICE,
@@ -329,8 +357,8 @@ describe("/api/me", () => {
     const DAVE = "did:plc:dave";
     // Bob follows Alice (mocked); Carol is followed by 5 of his follows
     await saveBubble(BOB, 1, [
-      { did: CAROL, commonCount: 5, score: 2 },
-      { did: DAVE, commonCount: 1, score: 0.5 },
+      { did: CAROL, commonCount: 5 },
+      { did: DAVE, commonCount: 1 },
     ]);
     for (const [did, seq] of [
       [CAROL, 2],
@@ -347,7 +375,7 @@ describe("/api/me", () => {
     const cookie = await loginAs(BOB);
 
     const bubble = await request(app)
-      .get("/api/me/changes?scope=bubble&sort=closeness")
+      .get("/api/me/changes?scope=bubble")
       .set("Cookie", cookie)
       .expect(200);
     expect(
@@ -359,8 +387,9 @@ describe("/api/me", () => {
         ],
       ),
     ).toEqual([
-      [ALICE, "follows", null],
+      // Newest first
       [CAROL, "inner", 5],
+      [ALICE, "follows", null],
     ]);
     expect(bubble.body.data.bubble.state).toBe("ready");
 
@@ -405,16 +434,6 @@ describe("/api/me", () => {
     expect(after.body.data.optedInVia).toBe("follow");
   });
 
-  it("checks likes/follows on demand", async () => {
-    const res = await request(app)
-      .post("/api/me/labeler/refresh")
-      .set("Cookie", await loginAs(BOB))
-      .expect(200);
-
-    expect(optInSync!.syncIfStale).toHaveBeenCalledWith(15_000);
-    expect(res.body.data.enabled).toBe(true);
-  });
-
   it("rejects unknown scopes", async () => {
     await request(app)
       .get("/api/me/changes?scope=everyone")
@@ -435,6 +454,50 @@ describe("/api/me", () => {
       .set("Cookie", await loginAs(ALICE))
       .expect(200);
     expect(res.body.data.deletedChanges).toBe(1);
+  });
+
+  it("stops tracking after deleting, until the user rejoins", async () => {
+    const cookie = await loginAs(ALICE);
+    await saveOptIn(ALICE, "like");
+
+    await request(app).delete("/api/me/data").set("Cookie", cookie).expect(200);
+
+    // Labels withdrawn, opt-in gone, nothing recorded any more
+    expect(labeler!.onOptOut).toHaveBeenCalledWith(ALICE);
+    expect(await getOptIn(ALICE)).toBeNull();
+    expect(await isIgnored(ALICE)).toBe(true);
+    const me = await request(app).get("/api/me").set("Cookie", cookie);
+    expect(me.body.data.paused).toBe("self");
+    await request(app).get("/api/me/changes").set("Cookie", cookie).expect(403);
+    await request(app).get("/api/me/bubble").set("Cookie", cookie).expect(403);
+
+    await request(app).post("/api/me/resume").set("Cookie", cookie).expect(200);
+
+    expect(await isIgnored(ALICE)).toBe(false);
+    await request(app).get("/api/me/changes").set("Cookie", cookie).expect(200);
+    await request(app).post("/api/me/resume").set("Cookie", cookie).expect(409);
+  });
+
+  it("keeps accounts excluded by the admin excluded", async () => {
+    await addIgnoredUser(BOB);
+    const cookie = await loginAs(BOB);
+
+    const me = await request(app).get("/api/me").set("Cookie", cookie);
+    expect(me.body.data.paused).toBe("admin");
+    await request(app).post("/api/me/resume").set("Cookie", cookie).expect(409);
+    // Deleting one's data must not turn an exclusion into a self-service one
+    await request(app).delete("/api/me/data").set("Cookie", cookie).expect(200);
+    await request(app).post("/api/me/resume").set("Cookie", cookie).expect(409);
+    expect(await isIgnored(BOB)).toBe(true);
+  });
+
+  it("lets an admin exclusion override a self-service pause", async () => {
+    const cookie = await loginAs(BOB);
+    await request(app).delete("/api/me/data").set("Cookie", cookie).expect(200);
+
+    await addIgnoredUser(BOB);
+
+    await request(app).post("/api/me/resume").set("Cookie", cookie).expect(409);
   });
 });
 
@@ -511,5 +574,18 @@ describe("/api/admin", () => {
       .set("Cookie", await loginAs(ADMIN))
       .send({})
       .expect(409);
+  });
+
+  it("refuses to stop ingestion that is not running", async () => {
+    ingestion.running = false;
+    try {
+      await request(app)
+        .post("/api/admin/jetstream/stop")
+        .set("Cookie", await loginAs(ADMIN))
+        .expect(409);
+      expect(ingester.stop).not.toHaveBeenCalled();
+    } finally {
+      ingestion.running = true;
+    }
   });
 });
