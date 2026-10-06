@@ -59,6 +59,8 @@ async function request<T>(
 export interface Me {
   did: string;
   handle: string | null;
+  // Avatar blob CID, if the profile is known
+  avatar: string | null;
   isAdmin: boolean;
 }
 

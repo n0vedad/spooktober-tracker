@@ -16,9 +16,13 @@ import {
 import { bubbleService } from "../bubble/index.js";
 import { seedAccounts } from "../ingest/seed.js";
 import { ADMIN_DID, FRONTEND_URL, PUBLIC_URL } from "../config.js";
+import { getSnapshot } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { resolveHandle } from "../utils/handle-resolver.js";
 import { validate } from "../validation/middleware.js";
+
+// Longest the login waits for the user's own profile
+const SEED_WAIT_MS = 3000;
 
 const router = express.Router();
 
@@ -113,8 +117,14 @@ router.get("/oauth/callback", async (req, res) => {
   try {
     const token = await createSession(did);
 
-    // Know the user's own profile, so their first change is detected
-    void seedAccounts([did]);
+    // Know the user's own profile, so their first change is detected and the
+    // page can show their avatar. Waited for briefly: one AppView request
+    await Promise.race([
+      seedAccounts([did]).catch((error) => {
+        console.warn(`⚠️  Could not seed profile of ${did}:`, error);
+      }),
+      new Promise((resolve) => setTimeout(resolve, SEED_WAIT_MS)),
+    ]);
 
     // Map the user's bubble right away, so it is ready when they look at it
     bubbleService.ensure(did).catch((error) => {
@@ -161,13 +171,24 @@ router.post("/api/auth/logout", async (req, res) => {
  */
 router.get("/api/me", requireAuth, async (req, res) => {
   const did = req.did!;
+  const [handle, snapshot] = await Promise.all([
+    resolveHandle(did),
+    getSnapshot(did),
+  ]);
   const response: APIResponse<{
     did: string;
     handle: string | null;
+    // Avatar blob CID from the profile seeded at login
+    avatar: string | null;
     isAdmin: boolean;
   }> = {
     success: true,
-    data: { did, handle: await resolveHandle(did), isAdmin: did === ADMIN_DID },
+    data: {
+      did,
+      handle,
+      avatar: snapshot?.profile_seen ? snapshot.avatar_cid : null,
+      isAdmin: did === ADMIN_DID,
+    },
   };
   res.json(response);
 });

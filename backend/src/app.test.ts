@@ -10,7 +10,13 @@ import {
 } from "./auth/sessions.js";
 import { bubbleService } from "./bubble/index.js";
 import { saveBubble } from "./bubble/store.js";
-import { flagNoisy, getChangeHistory, pool, recordChange } from "./db.js";
+import {
+  flagNoisy,
+  getChangeHistory,
+  pool,
+  recordChange,
+  saveSnapshot,
+} from "./db.js";
 import { seedAccounts } from "./ingest/seed.js";
 import { optInSync } from "./labeler/index.js";
 import { saveOptIn } from "./labeler/store.js";
@@ -130,6 +136,23 @@ describe("authentication", () => {
       .expect(200);
 
     expect(res.body.data).toMatchObject({ did: ADMIN, isAdmin: true });
+  });
+
+  it("includes the avatar of the seeded profile", async () => {
+    await saveSnapshot({
+      did: ADMIN,
+      handle: "admin.test",
+      display_name: "Admin",
+      avatar_cid: "bafyavatar",
+      profile_seen: true,
+    });
+
+    const res = await request(app)
+      .get("/api/me")
+      .set("Cookie", await loginAs(ADMIN))
+      .expect(200);
+
+    expect(res.body.data.avatar).toBe("bafyavatar");
   });
 
   it("logs out and invalidates the session", async () => {

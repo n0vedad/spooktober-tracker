@@ -46,14 +46,11 @@ const en = {
     "Only publicly visible profile data: handles, display names and avatar references. We never store passwords, private posts or OAuth tokens. Bots and brand-new accounts setting up their profile are filtered out.",
   "faq.removeQ": "Can I remove my data?",
   "faq.removeA":
-    'Yes. After logging in, click "Delete all my data" to remove your own profile change history.',
+    'Yes. After logging in, click your avatar at the top right and choose "Delete all my data" to remove your own profile change history.',
 
   "follows.loading": "Loading follows...",
 
-  "tracker.view": "🎃 View Spooky Changes",
-  "tracker.noFollows": "You don't follow anyone yet",
   "tracker.loading": "Loading changes...",
-  "tracker.back": "Back",
   "tracker.heading": "🎃 Detected Changes ({count})",
   "tracker.loadMore": "Load more ({count} remaining)",
   "tracker.newest": "🕒 Newest first",
@@ -66,19 +63,22 @@ const en = {
     "⚠️ Server disconnected. Unable to check for changes.",
   "tracker.connectionLost":
     "Connection lost. Please check your internet connection and refresh the page.",
-  "tracker.delete": "Delete all my data",
-  "tracker.deleteTitle": "⚠️ Delete all your data?",
-  "tracker.deleteText":
+  "account.menu": "Account menu",
+  "account.logout": "Logout",
+  "account.delete": "Delete all my data",
+  "account.deleteTitle": "⚠️ Delete all your data?",
+  "account.deleteText":
     "This removes your own profile change history from the community database and logs you out. This action cannot be undone.",
-  "tracker.deleteConfirm": "Yes, delete all my data",
-  "tracker.deleting": "Deleting...",
-  "tracker.cancel": "Cancel",
-  "tracker.deleted": "Deleted your data ({count} changes)",
-  "tracker.deleteFailed": "Failed to delete your data",
+  "account.deleteConfirm": "Yes, delete all my data",
+  "account.deleting": "Deleting...",
+  "account.cancel": "Cancel",
+  "account.deleted": "Deleted your data ({count} changes)",
+  "account.deleteFailed": "Failed to delete your data",
 
   "bubble.computing":
     "👻 Mapping your bubble… {done} / {total} follows checked",
-  "bubble.followsOnly": " - showing your follows until it is done.",
+  "bubble.waiting":
+    "Your changes appear as soon as your bubble is mapped. This takes a moment once after logging in.",
   "bubble.failed":
     "Could not map your bubble right now - showing your follows only.",
 
@@ -163,14 +163,11 @@ const de: Record<MessageKey, string> = {
     "Nur öffentlich sichtbare Profildaten: Handles, Anzeigenamen und Verweise auf Profilbilder. Wir speichern nie Passwörter, private Posts oder OAuth-Tokens. Bots und brandneue Accounts, die gerade ihr Profil einrichten, werden herausgefiltert.",
   "faq.removeQ": "Kann ich meine Daten löschen?",
   "faq.removeA":
-    "Ja. Klick nach dem Login auf „Alle meine Daten löschen“, um deinen eigenen Änderungsverlauf zu entfernen.",
+    "Ja. Klick nach dem Login oben rechts auf deinen Avatar und wähle „Alle meine Daten löschen“, um deinen eigenen Änderungsverlauf zu entfernen.",
 
   "follows.loading": "Follows werden geladen…",
 
-  "tracker.view": "🎃 Gruselige Änderungen ansehen",
-  "tracker.noFollows": "Du folgst noch niemandem",
   "tracker.loading": "Änderungen werden geladen…",
-  "tracker.back": "Zurück",
   "tracker.heading": "🎃 Erkannte Änderungen ({count})",
   "tracker.loadMore": "Mehr laden (noch {count})",
   "tracker.newest": "🕒 Neueste zuerst",
@@ -183,19 +180,22 @@ const de: Record<MessageKey, string> = {
     "⚠️ Keine Verbindung zum Server. Änderungen können nicht geprüft werden.",
   "tracker.connectionLost":
     "Verbindung verloren. Prüf deine Internetverbindung und lade die Seite neu.",
-  "tracker.delete": "Alle meine Daten löschen",
-  "tracker.deleteTitle": "⚠️ Alle deine Daten löschen?",
-  "tracker.deleteText":
+  "account.menu": "Kontomenü",
+  "account.logout": "Abmelden",
+  "account.delete": "Alle meine Daten löschen",
+  "account.deleteTitle": "⚠️ Alle deine Daten löschen?",
+  "account.deleteText":
     "Das entfernt deinen eigenen Änderungsverlauf aus der Community-Datenbank und meldet dich ab. Das lässt sich nicht rückgängig machen.",
-  "tracker.deleteConfirm": "Ja, alle meine Daten löschen",
-  "tracker.deleting": "Wird gelöscht…",
-  "tracker.cancel": "Abbrechen",
-  "tracker.deleted": "Deine Daten wurden gelöscht ({count} Änderungen)",
-  "tracker.deleteFailed": "Löschen fehlgeschlagen",
+  "account.deleteConfirm": "Ja, alle meine Daten löschen",
+  "account.deleting": "Wird gelöscht…",
+  "account.cancel": "Abbrechen",
+  "account.deleted": "Deine Daten wurden gelöscht ({count} Änderungen)",
+  "account.deleteFailed": "Löschen fehlgeschlagen",
 
   "bubble.computing":
     "👻 Deine Bubble wird vermessen… {done} / {total} Follows geprüft",
-  "bubble.followsOnly": " - bis dahin siehst du deine Follows.",
+  "bubble.waiting":
+    "Deine Änderungen erscheinen, sobald deine Bubble vermessen ist. Das dauert nach dem Login einmalig einen Moment.",
   "bubble.failed":
     "Deine Bubble konnte gerade nicht vermessen werden - du siehst nur deine Follows.",
 

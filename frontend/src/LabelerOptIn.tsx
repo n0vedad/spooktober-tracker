@@ -3,7 +3,7 @@
  * follow the labeler account) and whether they already are.
  */
 
-import { createResource, createSignal, Show } from "solid-js";
+import { createEffect, createResource, createSignal, Show } from "solid-js";
 import {
   getLabelerStatus,
   refreshLabelerStatus,
@@ -19,6 +19,8 @@ interface Props {
   // Status loader (tests)
   load?: () => Promise<LabelerStatus>;
   refresh?: () => Promise<LabelerStatus>;
+  // Called with every loaded or refreshed status
+  onStatus?: (status: LabelerStatus) => void;
 }
 
 /**
@@ -27,6 +29,11 @@ interface Props {
 export const LabelerOptIn = (props: Props) => {
   const [status, { mutate }] = createResource(props.load ?? getLabelerStatus);
   const [checking, setChecking] = createSignal(false);
+
+  createEffect(() => {
+    const current = status();
+    if (current) props.onStatus?.(current);
+  });
 
   const profileUrl = () =>
     `https://bsky.app/profile/${status()?.handle ?? status()?.did}`;

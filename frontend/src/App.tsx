@@ -6,8 +6,16 @@
 // Base
 import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { Toaster } from "solid-toast";
+import { AccountMenu } from "./AccountMenu";
 import { AdminPanel } from "./AdminPanel";
-import { getMe, getMyFollows, logout, startLogin, type Me } from "./api";
+import {
+  getMe,
+  getMyFollows,
+  logout,
+  startLogin,
+  type LabelerStatus,
+  type Me,
+} from "./api";
 import { HandleTypeahead } from "./HandleTypeahead";
 import { lang, setLang, t, type MessageKey } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
@@ -163,6 +171,17 @@ const App = () => {
   const login = Login();
   const fetch = Fetch();
 
+  // Labeler opt-in of the signed-in user; the changes are shown once the
+  // labeler is liked or followed (or when no labeler is configured)
+  const [labeler, setLabeler] = createSignal<LabelerStatus | null>(null);
+  const labelerActive = () => {
+    const status = labeler();
+    return status !== null && (!status.enabled || !!status.optedInVia);
+  };
+  createEffect(() => {
+    if (!login.me()) setLabeler(null);
+  });
+
   // Auto-fetch follows when logged in
   createEffect(() => {
     if (login.me() && !fetch.loaded() && !fetch.loading()) {
@@ -187,7 +206,7 @@ const App = () => {
           <div class="m-5 flex flex-1 flex-col items-center">
             <div class="flex w-full max-w-2xl flex-1 flex-col px-4">
               <div class="mb-2 flex items-center">
-                <div class="basis-1/3">
+                <div class="flex basis-1/3 items-center gap-x-3">
                   <div
                     class="flex w-fit cursor-pointer items-center"
                     title={t("theme.title")}
@@ -205,11 +224,6 @@ const App = () => {
                       <div class="icon-[lucide--sun] text-lg sm:text-xl" />
                     )}
                   </div>
-                </div>
-                <div class="basis-1/3 text-center text-lg font-bold sm:text-xl">
-                  🎃 Spooktober Tracker
-                </div>
-                <div class="flex basis-1/3 items-center justify-end gap-x-2">
                   {/* Language: shows the flag of the language to switch to */}
                   <button
                     class="cursor-pointer text-lg leading-none sm:text-xl"
@@ -219,19 +233,24 @@ const App = () => {
                   >
                     {lang() === "de" ? "🇬🇧" : "🇩🇪"}
                   </button>
+                </div>
+                <div class="basis-1/3 text-center text-lg font-bold sm:text-xl">
+                  🎃 Spooktober Tracker
+                </div>
+                <div class="flex basis-1/3 items-center justify-end gap-x-2">
                   <Show when={login.me()}>
-                    <button
-                      class="flex cursor-pointer items-center justify-center rounded px-2 py-1 text-slate-700 dark:text-slate-100"
-                      title="Logout"
-                      onclick={login.logoutBsky}
-                    >
-                      <div class="icon-[lucide--door-open] text-lg sm:text-xl" />
-                    </button>
+                    {(me) => (
+                      <AccountMenu me={me()} onLogout={login.logoutBsky} />
+                    )}
                   </Show>
                 </div>
               </div>
-              {/* Content, vertically centered between header and footer */}
-              <div class="flex flex-1 flex-col justify-center">
+              {/* Content: the login page is centered between header and
+                  footer; signed in, it starts at the top so changing lists
+                  only grow downwards */}
+              <div
+                class={`flex flex-1 flex-col ${login.me() ? "" : "justify-center"}`}
+              >
                 <div class="mb-4 flex flex-col items-center">
                   <Show when={!login.me() && !login.checking()}>
                     <form
@@ -256,27 +275,29 @@ const App = () => {
                       </button>
                     </form>
 
-                    {(() => {
-                      const current = login.notice();
-                      if (!current) return null;
-
-                      const isInfo = current.tone === "info";
-                      const base =
-                        "mx-4 mt-3 max-w-2xl rounded-lg border px-3 py-2 text-sm font-medium text-center";
-                      const info =
-                        " border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200";
-                      const error =
-                        " border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200";
-
-                      return (
-                        <div class={base + (isInfo ? info : error)}>
-                          {t(current.key)}
-                        </div>
-                      );
-                    })()}
+                    {/* Status line: fixed height, so the boxes below never move */}
+                    <div
+                      class="mx-4 flex h-12 w-full max-w-md items-center justify-center px-4 text-center text-xs font-medium sm:text-sm"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <Show when={login.notice()}>
+                        {(current) => (
+                          <span
+                            class={`line-clamp-2 ${
+                              current().tone === "info"
+                                ? "text-emerald-700 dark:text-emerald-300"
+                                : "text-red-700 dark:text-red-400"
+                            }`}
+                          >
+                            {t(current().key)}
+                          </span>
+                        )}
+                      </Show>
+                    </div>
 
                     {/* Login Info Note */}
-                    <div class="mx-4 mt-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
+                    <div class="mx-4 max-w-2xl rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/30">
                       <h4 class="mb-2 text-sm font-bold text-blue-800 sm:text-base dark:text-blue-300">
                         {t("login.howTitle")}
                       </h4>
@@ -303,13 +324,6 @@ const App = () => {
                       </div>
                     </div>
                   </Show>
-                  <Show when={login.me()?.handle}>
-                    <div class="mb-4 text-center text-sm sm:text-base">
-                      {t("login.loggedInAs", {
-                        handle: login.me()?.handle ?? "",
-                      })}
-                    </div>
-                  </Show>
                   <Show when={login.checking()}>
                     <div class="mx-4 my-3 max-w-md rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">
                       {t("login.loading")}
@@ -320,23 +334,21 @@ const App = () => {
                 <Show when={login.me()}>
                   <div class="flex flex-col items-center">
                     {/* Labeler opt-in hint or confirmation */}
-                    <LabelerOptIn />
+                    <LabelerOptIn onStatus={setLabeler} />
 
                     {/* Admin Panel */}
                     <Show when={login.me()?.isAdmin}>
                       <AdminPanel />
                     </Show>
 
-                    <Show when={fetch.loading()}>
-                      <div class="m-3">{t("follows.loading")}</div>
-                    </Show>
-
-                    {/* Spooktober Tracker */}
-                    <Show when={fetch.loaded() && !fetch.loading()}>
-                      <SpooktoberTracker
-                        follows={fetch.follows()}
-                        onLogout={login.logoutBsky}
-                      />
+                    {/* Spooktober Tracker, once the labeler is subscribed */}
+                    <Show when={labelerActive()}>
+                      <Show
+                        when={fetch.loaded() && !fetch.loading()}
+                        fallback={<div class="m-3">{t("follows.loading")}</div>}
+                      >
+                        <SpooktoberTracker follows={fetch.follows()} />
+                      </Show>
                     </Show>
                   </div>
                 </Show>

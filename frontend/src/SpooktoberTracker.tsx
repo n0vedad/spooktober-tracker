@@ -1,29 +1,28 @@
 /**
  * Spooktober Tracker Component
  * The backend tracks the whole network 24/7; this view shows the changes of
- * the user's follows and, by closeness tier, of their wider network.
+ * the user's follows and, by closeness tier, of their wider network. Right
+ * after the first login only the bubble computation is shown, the list
+ * appears once it is done.
  */
 
-import { createSignal, For, onCleanup, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { ProfileChange } from "../../shared/types";
 import {
   getBubbleStatus,
   getChangeHistory,
   getMyChanges,
-  purgeMyData,
   type BubbleStatus,
 } from "./api";
 import { ChangeCard } from "./ChangeCard";
 import { t } from "./i18n";
 import { formatDuration } from "./utils/ingestion";
 import { TIER_OPTIONS, tierHint, tierLabel, type Tier } from "./utils/tiers";
-import { showError, showSuccess } from "./utils/toast-helpers";
+import { showError } from "./utils/toast-helpers";
 
 interface Props {
   // Accounts the user follows, with handles
   follows: { did: string; handle: string }[];
-  // Logout routine of the parent (used after deleting one's data)
-  onLogout?: () => Promise<void> | void;
 }
 
 // Changes shown per "load more" step
@@ -47,10 +46,15 @@ export function latestPerAccount(changes: ProfileChange[]): ProfileChange[] {
 }
 
 /**
- * Render the tracker: entry screen, then the change list.
+ * Render the tracker: bubble progress until the first bubble exists, then the
+ * change list.
  */
 export const SpooktoberTracker = (props: Props) => {
-  const [viewing, setViewing] = createSignal(false);
+  // "starting" until the bubble state is known, "waiting" while the first
+  // bubble is computed, "ready" once the list is shown
+  const [phase, setPhase] = createSignal<"starting" | "waiting" | "ready">(
+    "starting",
+  );
   const [changes, setChanges] = createSignal<ProfileChange[]>([]);
   const [scope, setScope] = createSignal<Tier>("bubble");
   const [sort, setSort] = createSignal<"recent" | "closeness">("recent");
@@ -65,8 +69,6 @@ export const SpooktoberTracker = (props: Props) => {
   const [highlighted, setHighlighted] = createSignal(new Set<number>());
   const [updatedAt, setUpdatedAt] = createSignal<number | null>(null);
   const [now, setNow] = createSignal(Date.now());
-  const [confirmDelete, setConfirmDelete] = createSignal(false);
-  const [deleting, setDeleting] = createSignal(false);
 
   let refreshTimer: number | undefined;
   let clockTimer: number | undefined;
@@ -148,7 +150,7 @@ export const SpooktoberTracker = (props: Props) => {
     clearInterval(clockTimer);
   };
 
-  // Follow the bubble computation, then reload once it is done
+  // Follow the bubble computation, then show or reload the list
   const startBubblePoll = () => {
     if (bubblePoll) return;
     bubblePoll = window.setInterval(async () => {
@@ -157,10 +159,12 @@ export const SpooktoberTracker = (props: Props) => {
         setBubble(status);
         if (status.state !== "computing") {
           stopBubblePoll();
-          if (status.state === "ready") await loadChanges(true);
+          if (phase() !== "ready") await showList();
+          else if (status.state === "ready") await loadChanges(true);
         }
       } catch {
         stopBubblePoll();
+        if (phase() !== "ready") await showList();
       }
     }, 2000);
   };
@@ -180,38 +184,27 @@ export const SpooktoberTracker = (props: Props) => {
     await loadChanges();
   };
 
-  const open = async () => {
+  const showList = async () => {
     await loadChanges();
-    setViewing(true);
-    startRefresh();
+    setPhase("ready");
+    if (!disconnected()) startRefresh();
   };
 
-  const back = () => {
-    stopRefresh();
-    stopBubblePoll();
-    setViewing(false);
-    setChanges([]);
-    setHistory(new Map());
-    setExpanded(null);
-    setVisibleCount(PAGE_SIZE);
-  };
-
-  const deleteAllData = async () => {
-    setDeleting(true);
+  // Wait for the first bubble; a recomputation keeps the previous one usable
+  onMount(async () => {
     try {
-      const result = await purgeMyData();
-      showSuccess(t("tracker.deleted", { count: result.deletedChanges }), {
-        duration: 4000,
-      });
-      await props.onLogout?.();
-    } catch (error) {
-      console.error(error);
-      showError(t("tracker.deleteFailed"));
-    } finally {
-      setDeleting(false);
-      setConfirmDelete(false);
+      const status = await getBubbleStatus();
+      setBubble(status);
+      if (status.state === "computing" && !status.previous) {
+        setPhase("waiting");
+        startBubblePoll();
+        return;
+      }
+    } catch {
+      // The list request below reports the connection problem
     }
-  };
+    await showList();
+  });
 
   onCleanup(() => {
     stopRefresh();
@@ -235,69 +228,17 @@ export const SpooktoberTracker = (props: Props) => {
 
   return (
     <div class="mt-6 w-full overflow-hidden">
-      {/* Entry screen */}
-      <Show when={!viewing()}>
-        <div class="mb-4">
-          <button
-            onclick={open}
-            disabled={props.follows.length === 0 || loading()}
-            class="w-full rounded bg-orange-600 px-4 py-3 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading()
-              ? t("tracker.loading")
-              : props.follows.length === 0
-                ? t("tracker.noFollows")
-                : t("tracker.view")}
-          </button>
-
-          <Show when={confirmDelete()}>
-            <div class="mt-4 rounded-lg border border-red-400 bg-red-50 p-4 dark:border-red-600 dark:bg-red-900/20">
-              <h3 class="mb-2 font-bold text-red-800 dark:text-red-300">
-                {t("tracker.deleteTitle")}
-              </h3>
-              <p class="mb-4 text-sm text-red-700 dark:text-red-400">
-                {t("tracker.deleteText")}
-              </p>
-              <div class="flex flex-col gap-2 sm:flex-row">
-                <button
-                  onclick={deleteAllData}
-                  disabled={deleting()}
-                  class="flex-1 rounded bg-red-700 px-4 py-2 font-bold text-white hover:bg-red-800 disabled:opacity-50"
-                >
-                  {deleting()
-                    ? t("tracker.deleting")
-                    : t("tracker.deleteConfirm")}
-                </button>
-                <button
-                  onclick={() => setConfirmDelete(false)}
-                  disabled={deleting()}
-                  class="flex-1 rounded bg-gray-600 px-4 py-2 font-bold text-white hover:bg-gray-700 disabled:opacity-50"
-                >
-                  {t("tracker.cancel")}
-                </button>
-              </div>
-            </div>
-          </Show>
-
-          <button
-            onclick={() => setConfirmDelete(true)}
-            class="mt-4 w-full rounded bg-red-600 px-4 py-3 font-bold text-white hover:bg-red-700"
-          >
-            {t("tracker.delete")}
-          </button>
-        </div>
+      <Show when={phase() === "starting"}>
+        <div class="m-3 text-center">{t("tracker.loading")}</div>
       </Show>
 
       {/* Change list */}
-      <Show when={viewing()}>
-        <div class="mb-4">
-          <button
-            onclick={back}
-            class="mb-4 w-full rounded bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700"
-          >
-            {t("tracker.back")}
-          </button>
+      <Show when={phase() === "waiting"}>
+        <BubbleProgress status={computing()} waiting />
+      </Show>
 
+      <Show when={phase() === "ready"}>
+        <div class="mb-4">
           {/* How far into the bubble */}
           <div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <For each={TIER_OPTIONS}>
@@ -333,29 +274,9 @@ export const SpooktoberTracker = (props: Props) => {
             </button>
           </div>
 
-          {/* Bubble computation progress */}
+          {/* Bubble recomputation progress */}
           <Show when={computing()}>
-            {(status) => (
-              <div class="mb-3 rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm dark:border-purple-700 dark:bg-purple-900/30">
-                <div class="mb-2">
-                  {t("bubble.computing", {
-                    done: status().done,
-                    total: status().total,
-                  })}
-                  <Show when={!status().previous}>
-                    {t("bubble.followsOnly")}
-                  </Show>
-                </div>
-                <div class="h-2 w-full overflow-hidden rounded bg-purple-200 dark:bg-purple-800">
-                  <div
-                    class="h-2 bg-purple-600 transition-all"
-                    style={{
-                      width: `${status().total ? Math.round((status().done / status().total) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+            <BubbleProgress status={computing()} />
           </Show>
           <Show when={bubble()?.state === "failed"}>
             <div class="mb-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
@@ -381,7 +302,10 @@ export const SpooktoberTracker = (props: Props) => {
                 {updatedText()}
               </span>
             </div>
-            <div class="mb-4 space-y-3">
+            <div
+              class={`mb-4 space-y-3 transition-opacity ${loading() ? "opacity-50" : ""}`}
+              aria-busy={loading()}
+            >
               <For each={changes().slice(0, visibleCount())}>
                 {(change) => (
                   <ChangeCard
@@ -409,6 +333,38 @@ export const SpooktoberTracker = (props: Props) => {
             </Show>
           </Show>
         </div>
+      </Show>
+    </div>
+  );
+};
+
+/**
+ * Progress of the bubble computation.
+ */
+const BubbleProgress = (props: {
+  status: Extract<BubbleStatus, { state: "computing" }> | null;
+  // First computation: nothing to show until it is done
+  waiting?: boolean;
+}) => {
+  const done = () => props.status?.done ?? 0;
+  const total = () => props.status?.total ?? 0;
+  return (
+    <div class="mb-3 rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm dark:border-purple-700 dark:bg-purple-900/30">
+      <div class="mb-2">
+        {t("bubble.computing", { done: done(), total: total() })}
+      </div>
+      <div class="h-2 w-full overflow-hidden rounded bg-purple-200 dark:bg-purple-800">
+        <div
+          class="h-2 bg-purple-600 transition-all"
+          style={{
+            width: `${total() ? Math.round((done() / total()) * 100) : 0}%`,
+          }}
+        />
+      </div>
+      <Show when={props.waiting}>
+        <p class="mt-2 text-xs text-purple-900 dark:text-purple-200">
+          {t("bubble.waiting")}
+        </p>
       </Show>
     </div>
   );
