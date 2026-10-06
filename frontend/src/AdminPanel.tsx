@@ -33,6 +33,8 @@ import { showError, showSuccess } from "./utils/toast-helpers";
 
 type Tab = "bots" | "optins" | "ignored";
 
+// Background refresh of the lists
+const LIST_REFRESH_MS = 30_000;
 // Reconnect delays for the status WebSocket (ms), capped at the last value
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 
@@ -71,7 +73,7 @@ export const AdminPanel = () => {
     createResource(getAdminStats);
   const [tab, setTab] = createSignal<Tab>("bots");
   const [bots, { refetch: refetchBots }] = createResource(getNoisyAccounts);
-  const [optIns] = createResource(getOptIns);
+  const [optIns, { refetch: refetchOptIns }] = createResource(getOptIns);
   const [ignored, { refetch: refetchIgnored }] =
     createResource(getIgnoredUsers);
 
@@ -108,10 +110,23 @@ export const AdminPanel = () => {
     };
   };
 
-  onMount(connect);
+  // Lists and labeler figures change in the background (new bots, opt-ins)
+  const refreshLists = () => {
+    void refetchStats();
+    void refetchBots();
+    void refetchOptIns();
+    void refetchIgnored();
+  };
+  let listTimer: number | undefined;
+
+  onMount(() => {
+    connect();
+    listTimer = window.setInterval(refreshLists, LIST_REFRESH_MS);
+  });
   onCleanup(() => {
     closed = true;
     clearTimeout(reconnectTimer);
+    clearInterval(listTimer);
     ws?.close();
   });
 
@@ -237,7 +252,10 @@ export const AdminPanel = () => {
             <button
               role="tab"
               aria-selected={tab() === id}
-              onclick={() => setTab(id)}
+              onclick={() => {
+                setTab(id);
+                refreshLists();
+              }}
               class={`flex-1 rounded border px-2 py-1.5 text-sm font-semibold ${
                 tab() === id
                   ? "border-yellow-600 bg-yellow-500 text-white"

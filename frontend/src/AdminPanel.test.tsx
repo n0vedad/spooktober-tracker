@@ -117,6 +117,22 @@ describe("AdminPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "🎃 Opt-ins" }));
 
-    expect(await screen.findByText("@fan.test")).toBeInTheDocument();
+    // Switching tabs reloads the list, which re-renders its rows
+    await vi.waitFor(() =>
+      expect(screen.getByText("@fan.test")).toBeInTheDocument(),
+    );
+    expect(api.getOptIns).toHaveBeenCalledTimes(2);
+  });
+
+  it("reloads the lists in the background", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(() => <AdminPanel />);
+    await screen.findByText("@clock.test");
+    const calls = vi.mocked(api.getNoisyAccounts).mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(api.getNoisyAccounts).toHaveBeenCalledTimes(calls + 1);
+    vi.useRealTimers();
   });
 });
