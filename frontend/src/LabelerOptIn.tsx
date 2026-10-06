@@ -3,13 +3,20 @@
  * follow the labeler account) and whether they already are.
  */
 
-import { createEffect, createResource, createSignal, Show } from "solid-js";
+import {
+  createEffect,
+  createResource,
+  createSignal,
+  For,
+  Show,
+} from "solid-js";
+import { LABEL_DEFINITIONS } from "../../shared/labels";
 import {
   getLabelerStatus,
   refreshLabelerStatus,
   type LabelerStatus,
 } from "./api";
-import { t, type MessageKey } from "./i18n";
+import { lang, t, type MessageKey } from "./i18n";
 import { showError } from "./utils/toast-helpers";
 
 // Ways to opt in that have a translated description
@@ -55,6 +62,12 @@ export const LabelerOptIn = (props: Props) => {
     }
   };
 
+  // Label names and descriptions in the page language (as the apps show them)
+  const labels = () =>
+    LABEL_DEFINITIONS.map(
+      (def) => def.locales.find((l) => l.lang === lang()) ?? def.locales[0],
+    );
+
   const labelerName = (handle: string | null | undefined) =>
     handle ? `@${handle}` : t("optin.theLabeler");
 
@@ -75,6 +88,21 @@ export const LabelerOptIn = (props: Props) => {
                 </span>{" "}
                 {t("optin.textAfter")}
               </p>
+              <p class="mb-1 text-xs font-semibold text-orange-800 dark:text-orange-300">
+                {t("optin.labels")}
+              </p>
+              <ul class="mb-3 flex flex-wrap gap-1.5">
+                <For each={labels()}>
+                  {(label) => (
+                    <li
+                      class="rounded-full border border-orange-300 bg-white px-2 py-0.5 text-xs dark:border-orange-700 dark:bg-orange-950"
+                      title={label.description}
+                    >
+                      {label.name}
+                    </li>
+                  )}
+                </For>
+              </ul>
               <div class="flex flex-col gap-2 sm:flex-row">
                 <a
                   href={profileUrl()}

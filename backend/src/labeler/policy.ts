@@ -2,72 +2,15 @@
  * Which labels the Spooktober labeler emits, and when.
  */
 
+import { LABEL_DEFINITIONS, type LabelValue } from "../../../shared/labels.js";
 import type { ProfileChange } from "../../../shared/types.js";
 
-/**
- * Label values and their public definitions (published in the labeler's
- * app.bsky.labeler.service record).
- */
-export const LABEL_DEFINITIONS = [
-  {
-    identifier: "spooky-name",
-    locales: [
-      {
-        lang: "en",
-        name: "🎃 Spooky name",
-        description: "Changed their display name this Spooktober.",
-      },
-      {
-        lang: "de",
-        name: "🎃 Gruseliger Name",
-        description: "Hat im Spooktober den Anzeigenamen geändert.",
-      },
-    ],
-  },
-  {
-    identifier: "spooky-avatar",
-    locales: [
-      {
-        lang: "en",
-        name: "🎃 Spooky avatar",
-        description: "Changed their avatar this Spooktober.",
-      },
-      {
-        lang: "de",
-        name: "🎃 Gruseliges Profilbild",
-        description: "Hat im Spooktober das Profilbild geändert.",
-      },
-    ],
-  },
-  {
-    identifier: "spooky-handle",
-    locales: [
-      {
-        lang: "en",
-        name: "🎃 Spooky handle",
-        description: "Changed their handle this Spooktober.",
-      },
-      {
-        lang: "de",
-        name: "🎃 Gruseliger Handle",
-        description: "Hat im Spooktober den Handle geändert.",
-      },
-    ],
-  },
-] as const;
+export {
+  LABEL_DEFINITIONS,
+  LABELER_DESCRIPTION,
+  type LabelValue,
+} from "../../../shared/labels.js";
 
-/**
- * Profile description of the labeler account (published by
- * `pnpm labeler-setup`). It explains the opt-in, which the app cannot show
- * otherwise. Bluesky allows at most 256 graphemes.
- */
-export const LABELER_DESCRIPTION = [
-  "🎃 Spooktober labels for profile changes in October.",
-  "Like or follow this account to get labeled - unlike/unfollow removes your labels.",
-  "Subscribe to see the labels everywhere. 👻",
-].join("\n");
-
-export type LabelValue = (typeof LABEL_DEFINITIONS)[number]["identifier"];
 export const LABEL_VALUES = LABEL_DEFINITIONS.map((d) => d.identifier);
 
 /**

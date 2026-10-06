@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { describe, expect, it, vi } from "vitest";
 import type { LabelerStatus } from "./api";
+import { setLang } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
 
 const LABELER = {
@@ -24,6 +25,19 @@ describe("LabelerOptIn", () => {
       "href",
       "https://bsky.app/profile/spooktober-labeler.test",
     );
+  });
+
+  it("lists the labels in the page language", async () => {
+    setLang("de");
+    render(() => (
+      <LabelerOptIn load={async () => ({ ...LABELER, optedInVia: null })} />
+    ));
+
+    expect(await screen.findByText("🎃 Gruseliges Profilbild")).toHaveAttribute(
+      "title",
+      "Hat im Spooktober das Profilbild geändert.",
+    );
+    setLang("en");
   });
 
   it("confirms an existing opt-in", async () => {

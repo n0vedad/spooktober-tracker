@@ -103,9 +103,10 @@ const en = {
 
   "optin.title": "🎃 Get your Spooktober labels",
   "optin.textBefore":
-    "Your profile changes only get a label if you agree. Just like or follow",
+    "Your profile changes only get a label if you agree. Just like",
   "optin.textAfter":
-    "to opt in. Subscribe to it as well to see the labels everywhere.",
+    "(the heart on its profile) or follow it. Subscribe to it as well to see the labels everywhere.",
+  "optin.labels": "Labels you can get:",
   "optin.theLabeler": "the labeler",
   "optin.open": "Open the labeler's profile",
   "optin.check": "Done - check again",
@@ -217,10 +218,11 @@ const de: Record<MessageKey, string> = {
 
   "optin.title": "🎃 Hol dir deine Spooktober-Labels",
   "optin.textBefore":
-    "Deine Profiländerungen bekommen nur ein Label, wenn du zustimmst. Dazu einfach",
+    "Deine Profiländerungen bekommen nur ein Label, wenn du zustimmst. Gib dazu einfach",
   "optin.textAfter":
-    "liken oder folgen. Abonnierst du den Labeler außerdem, siehst du die Labels überall.",
-  "optin.theLabeler": "den Labeler",
+    "ein Like (das Herz auf dem Profil) oder folge ihm. Abonnierst du den Labeler außerdem, siehst du die Labels überall.",
+  "optin.labels": "Diese Labels kannst du bekommen:",
+  "optin.theLabeler": "dem Labeler",
   "optin.open": "Zum Profil des Labelers",
   "optin.check": "Erledigt – noch mal prüfen",
   "optin.checking": "Wird geprüft…",
