@@ -489,7 +489,15 @@ export async function seedSnapshots(
        SELECT did, handle, display_name, avatar_cid, TRUE, NOW()
        FROM unnest($1::text[], $2::text[], $3::text[], $4::text[])
          AS s(did, handle, display_name, avatar_cid)
-       ON CONFLICT (did) DO NOTHING`,
+       ON CONFLICT (did) DO UPDATE SET
+         handle = COALESCE(profile_snapshots.handle, EXCLUDED.handle),
+         display_name = EXCLUDED.display_name,
+         avatar_cid = EXCLUDED.avatar_cid,
+         profile_seen = TRUE,
+         updated_at = NOW()
+       -- Only completes handle-only snapshots; a seen profile is never
+       -- overwritten (the live state from Jetstream wins)
+       WHERE NOT profile_snapshots.profile_seen`,
       [
         chunk.map((s) => s.did),
         chunk.map((s) => s.handle),
@@ -500,6 +508,42 @@ export async function seedSnapshots(
     inserted += result.rowCount ?? 0;
   }
   return inserted;
+}
+
+/**
+ * Accounts among the given ones without a full baseline snapshot.
+ *
+ * @param dids Accounts to check.
+ * @returns DIDs without a snapshot or with a handle-only one.
+ */
+export async function findMissingBaselines(
+  dids: readonly string[],
+): Promise<string[]> {
+  if (dids.length === 0) return [];
+  const result = await pool.query<{ did: string }>(
+    `SELECT d.did FROM unnest($1::text[]) AS d(did)
+     LEFT JOIN profile_snapshots s ON s.did = d.did
+     WHERE s.did IS NULL OR NOT s.profile_seen`,
+    [[...new Set(dids)]],
+  );
+  return result.rows.map((row) => row.did);
+}
+
+/**
+ * Accounts whose changes someone will look at: bubble owners, their follows
+ * and bubbles, and labeler opt-ins.
+ *
+ * @returns Distinct DIDs.
+ */
+export async function listWatchedAccounts(): Promise<string[]> {
+  const result = await pool.query<{ did: string }>(
+    `SELECT user_did AS did FROM bubbles
+     UNION SELECT did FROM bubble_members
+     UNION SELECT unnest(follows) FROM follow_lists
+       WHERE did IN (SELECT user_did FROM bubbles)
+     UNION SELECT did FROM labeler_optins`,
+  );
+  return result.rows.map((row) => row.did);
 }
 
 /**

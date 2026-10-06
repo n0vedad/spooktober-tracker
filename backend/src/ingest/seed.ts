@@ -7,11 +7,17 @@
  * therefore seeded from profile data the AppView already returned.
  */
 
+import { retryDelay } from "../bubble/follow-lists.js";
 import { seedSnapshots, type ProfileSnapshot } from "../db.js";
 import { fetchWithTimeout } from "../utils/fetch-with-timeout.js";
 
 const GET_PROFILES_URL =
   "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfiles";
+// Retries of a rate-limited or failing getProfiles request
+const MAX_RETRIES = 4;
+
+const defaultSleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * The fields of an AppView profile view (profileView/profileViewDetailed)
@@ -56,15 +62,18 @@ export function snapshotFromView(view: ProfileViewLike): ProfileSnapshot {
 }
 
 /**
- * Load profile views of up to 25 accounts per request.
+ * Load profile views of up to 25 accounts per request. Rate limits (429)
+ * and server errors are retried.
  *
  * @param dids Accounts to load.
  * @param fetchFn Fetch implementation (tests).
+ * @param sleep Wait between retries (tests).
  * @returns Profile views of the accounts that exist.
  */
 export async function fetchProfiles(
   dids: readonly string[],
   fetchFn: typeof fetchWithTimeout = fetchWithTimeout,
+  sleep: (ms: number) => Promise<void> = defaultSleep,
 ): Promise<ProfileViewLike[]> {
   const views: ProfileViewLike[] = [];
   for (let i = 0; i < dids.length; i += 25) {
@@ -72,7 +81,15 @@ export async function fetchProfiles(
     for (const did of dids.slice(i, i + 25)) {
       url.searchParams.append("actors", did);
     }
-    const response = await fetchFn(url.toString());
+    let response: Response;
+    for (let attempt = 0; ; attempt++) {
+      response = await fetchFn(url.toString());
+      const retryable = response.status === 429 || response.status >= 500;
+      if (!retryable || attempt >= MAX_RETRIES) break;
+      await sleep(
+        response.status === 429 ? retryDelay(response) : 1000 * 2 ** attempt,
+      );
+    }
     if (!response.ok) throw new Error(`getProfiles failed: ${response.status}`);
     const data = (await response.json()) as { profiles: ProfileViewLike[] };
     views.push(...data.profiles);

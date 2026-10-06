@@ -3,6 +3,7 @@
  */
 
 import { seedFromViews } from "../ingest/seed.js";
+import { baselineSweeper } from "../ingest/sweeper.js";
 import { fetchFollowList } from "./follow-lists.js";
 import { createBubbleService } from "./service.js";
 import {
@@ -20,4 +21,8 @@ export const bubbleService = createBubbleService({
   saveFollowList,
   getBubbleInfo,
   saveBubble,
+  // Cached follow lists seed nothing: load the baselines still missing
+  onSaved: (userDid, dids) => {
+    void baselineSweeper.ensure(dids, `bubble of ${userDid}`);
+  },
 });

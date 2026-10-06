@@ -31,7 +31,7 @@ const defaultSleep = (ms: number) =>
  * @param response The 429 response.
  * @returns Delay in milliseconds.
  */
-function retryDelay(response: Response): number {
+export function retryDelay(response: Response): number {
   // Bluesky sends `ratelimit-reset` (unix seconds); Retry-After is the HTTP standard
   const reset = Number(response.headers.get("ratelimit-reset"));
   if (Number.isFinite(reset) && reset > 0) {

@@ -28,6 +28,8 @@ export interface BubbleServiceDeps {
     followsCount: number,
     members: ReturnType<typeof computeBubble>,
   ): Promise<void>;
+  // Called with the user, their follows and bubble members once saved
+  onSaved?(userDid: string, dids: string[]): void;
   concurrency?: number;
   maxAgeMs?: number;
   log?: Pick<Console, "log" | "warn" | "error">;
@@ -128,6 +130,11 @@ export function createBubbleService(deps: BubbleServiceDeps) {
 
     const members = computeBubble(userDid, lists);
     await deps.saveBubble(userDid, follows.length, members);
+    deps.onSaved?.(userDid, [
+      userDid,
+      ...follows,
+      ...members.map((m) => m.did),
+    ]);
     const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
     log.log(
       `🫧 Bubble for ${userDid}: ${members.length} accounts from ${follows.length} follows in ${seconds}s` +

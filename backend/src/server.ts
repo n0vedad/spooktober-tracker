@@ -8,7 +8,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { createApp } from "./app.js";
 import { getSessionDid, purgeExpiredSessions } from "./auth/sessions.js";
 import { ADMIN_DID, PORT } from "./config.js";
-import { initDB, pool } from "./db.js";
+import { initDB, listWatchedAccounts, pool } from "./db.js";
 import { describeIngestion } from "./ingest/health.js";
 import { ingester } from "./ingest/index.js";
 import {
@@ -16,8 +16,8 @@ import {
   OPT_IN_SYNC_INTERVAL_MS,
   optInSync,
 } from "./labeler/index.js";
-import { getLabelsAfter, getLatestSeq, getOptIns } from "./labeler/store.js";
-import { seedAccounts } from "./ingest/seed.js";
+import { getLabelsAfter, getLatestSeq } from "./labeler/store.js";
+import { baselineSweeper } from "./ingest/sweeper.js";
 import { serveLabelSubscription } from "./labeler/subscription.js";
 import { readSessionToken } from "./middleware/auth.js";
 
@@ -141,11 +141,14 @@ const start = async () => {
     await ingester.start();
     console.log("✅ Jetstream ingestion started");
 
+    // Every watched account needs a baseline before its first change
+    void listWatchedAccounts()
+      .then((dids) => baselineSweeper.ensure(dids, "startup"))
+      .catch((error) => console.warn("⚠️  Baseline sweep failed:", error));
+
     // Track who opted in to the labeler (likes/follows)
     if (labeler && optInSync) {
       optInSync.start(OPT_IN_SYNC_INTERVAL_MS);
-      // Opted-in accounts must be known before their first change
-      void getOptIns().then((optIns) => seedAccounts([...optIns.keys()]));
       console.log(`✅ Labeler running as ${labeler.did}`);
     }
   } catch (error) {

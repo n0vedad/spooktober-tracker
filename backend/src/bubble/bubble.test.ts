@@ -63,6 +63,27 @@ describe("bubble service", () => {
     ]);
   });
 
+  it("reports everyone in the saved bubble for baseline loading", async () => {
+    const onSaved = vi.fn();
+    const service = createBubbleService({
+      fetchFollowList: async (did) => GRAPH[did] ?? [],
+      getCachedFollowLists,
+      saveFollowList,
+      getBubbleInfo,
+      saveBubble,
+      onSaved,
+      log: quiet,
+    });
+
+    await service.ensure(ME);
+    await service.settle(ME);
+
+    expect(onSaved).toHaveBeenCalledOnce();
+    const [user, dids] = onSaved.mock.calls[0];
+    expect(user).toBe(ME);
+    expect([...dids].sort()).toEqual([A, B, ME, X, Y].sort());
+  });
+
   it("reuses cached follow lists across users and runs", async () => {
     const { service, fetch } = makeService();
     await service.ensure(ME);
