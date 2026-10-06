@@ -101,8 +101,14 @@ export const AccountMenu = (props: Props) => {
           class="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-1 text-left shadow-lg dark:border-gray-700 dark:bg-gray-800"
         >
           <Show when={props.me.handle}>
-            <div class="truncate border-b border-gray-200 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-              {t("login.loggedInAs", { handle: props.me.handle ?? "" })}
+            <div class="border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {t("login.loggedInAs")}
+              </div>
+              {/* Full handle, wrapped at any point if it is very long */}
+              <div class="text-sm font-semibold break-all">
+                @{props.me.handle}
+              </div>
             </div>
           </Show>
           <button

@@ -20,7 +20,7 @@ const en = {
   "login.enterHandle": "Please enter your handle.",
   "login.redirecting": "Redirecting to Bluesky...",
   "login.loading": "Loading...",
-  "login.loggedInAs": "Logged in as @{handle}",
+  "login.loggedInAs": "Logged in as",
   "login.serverDown": "Could not reach the server. Please try again later.",
   "login.logoutFailed":
     "Logout failed on the server; you are logged out locally.",
@@ -134,7 +134,7 @@ const de: Record<MessageKey, string> = {
   "login.enterHandle": "Bitte gib deinen Handle ein.",
   "login.redirecting": "Weiterleitung zu Bluesky…",
   "login.loading": "Lädt…",
-  "login.loggedInAs": "Angemeldet als @{handle}",
+  "login.loggedInAs": "Angemeldet als",
   "login.serverDown":
     "Der Server ist nicht erreichbar. Bitte versuch es später noch einmal.",
   "login.logoutFailed":

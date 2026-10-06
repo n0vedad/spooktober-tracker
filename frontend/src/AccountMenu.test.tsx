@@ -23,7 +23,8 @@ describe("AccountMenu", () => {
 
     fireEvent.click(button);
 
-    expect(screen.getByText("Logged in as @alice.test")).toBeInTheDocument();
+    expect(screen.getByText("Logged in as")).toBeInTheDocument();
+    expect(screen.getByText("@alice.test")).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: "Logout" }),
     ).toBeInTheDocument();
