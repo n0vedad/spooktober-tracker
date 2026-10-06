@@ -9,7 +9,13 @@ import {
   vi,
 } from "vitest";
 import { resetDB } from "../../test/db-helpers.js";
-import { getChangesSince, pool, recordChange } from "../db.js";
+import {
+  getChangesSince,
+  isIgnored,
+  pool,
+  purgeAccount,
+  recordChange,
+} from "../db.js";
 import { verifyLabel } from "./labels.js";
 import { createOptInSync } from "./optins.js";
 import { LABELER_DESCRIPTION, labelsForChange, seasonOf } from "./policy.js";
@@ -230,6 +236,7 @@ describe("opt-in sync", () => {
       getOptIns,
       saveOptIn,
       removeOptIn,
+      isIgnored,
       onNewOptIn,
       log: quiet,
     });
@@ -265,6 +272,39 @@ describe("opt-in sync", () => {
     expect([...(await getOptIns()).keys()]).toEqual([BOB]);
   });
 
+  it("ignores likes of accounts that deleted their data", async () => {
+    await purgeAccount(ALICE);
+    const { sync, labeler, onNewOptIn } = makeSync([], [ALICE, BOB]);
+
+    await sync.sync();
+
+    expect([...(await getOptIns()).keys()]).toEqual([BOB]);
+    expect(labeler.onOptIn).toHaveBeenCalledOnce();
+    expect(onNewOptIn).not.toHaveBeenCalledWith(ALICE);
+  });
+
+  it("reports every completed pass", async () => {
+    const onSynced = vi.fn();
+    const sync = createOptInSync({
+      labeler: {
+        did: LABELER,
+        onOptIn: vi.fn(async () => []),
+        onOptOut: vi.fn(async () => []),
+      },
+      fetchFollowers: async () => [ALICE],
+      fetchLikers: async () => [],
+      getOptIns,
+      saveOptIn,
+      removeOptIn,
+      onSynced,
+      log: quiet,
+    });
+
+    await sync.sync();
+
+    expect(onSynced).toHaveBeenCalledOnce();
+  });
+
   it("never mass-retracts on an empty API answer", async () => {
     for (let i = 0; i < 6; i++) await saveOptIn(`did:plc:u${i}`, "like");
     const { sync, labeler } = makeSync([], []);
@@ -273,30 +313,6 @@ describe("opt-in sync", () => {
 
     expect(labeler.onOptOut).not.toHaveBeenCalled();
     expect((await getOptIns()).size).toBe(6);
-  });
-
-  it("throttles on-demand syncs", async () => {
-    const fetchFollowers = vi.fn(async () => [ALICE]);
-    const sync = createOptInSync({
-      labeler: {
-        did: LABELER,
-        onOptIn: vi.fn(async () => []),
-        onOptOut: vi.fn(),
-      },
-      fetchFollowers,
-      fetchLikers: async () => [],
-      getOptIns,
-      saveOptIn,
-      removeOptIn,
-      log: quiet,
-    });
-
-    await sync.syncIfStale(60_000);
-    await sync.syncIfStale(60_000);
-    expect(fetchFollowers).toHaveBeenCalledTimes(1);
-
-    await sync.syncIfStale(0);
-    expect(fetchFollowers).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the previous state when fetching fails", async () => {

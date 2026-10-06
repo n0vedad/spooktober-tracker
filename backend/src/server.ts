@@ -14,7 +14,9 @@ import { ingester } from "./ingest/index.js";
 import {
   labeler,
   OPT_IN_SYNC_INTERVAL_MS,
+  optInStream,
   optInSync,
+  optInWatch,
 } from "./labeler/index.js";
 import { getLabelsAfter, getLatestSeq } from "./labeler/store.js";
 import { baselineSweeper } from "./ingest/sweeper.js";
@@ -149,6 +151,7 @@ const start = async () => {
     // Track who opted in to the labeler (likes/follows)
     if (labeler && optInSync) {
       optInSync.start(OPT_IN_SYNC_INTERVAL_MS);
+      optInStream?.start();
       console.log(`✅ Labeler running as ${labeler.did}`);
     }
   } catch (error) {
@@ -170,6 +173,8 @@ const shutdown = async (signal: string) => {
   shuttingDown = true;
   console.log(`${signal} received, closing server...`);
   try {
+    optInWatch?.stop();
+    optInStream?.stop();
     await ingester.stop();
     await pool.end();
     console.log("✅ Database connections closed");

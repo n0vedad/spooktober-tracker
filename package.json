@@ -21,7 +21,9 @@
     "format:check": "pnpm --filter frontend format:check && pnpm --filter backend format:check",
     "test": "pnpm --filter backend test && pnpm --filter frontend test",
     "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck",
-    "labeler-setup": "pnpm --filter backend labeler-setup"
+    "labeler-setup": "pnpm --filter backend labeler-setup",
+    "test-labeler-key": "pnpm --filter backend labeler-key",
+    "prod-labeler-key": "pnpm --filter backend labeler-key"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",

@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from "@solidjs/testing-library";
-import { describe, expect, it, vi } from "vitest";
-import type { LabelerStatus } from "./api";
+import { render, screen } from "@solidjs/testing-library";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { LABEL_DEFINITIONS } from "../../shared/labels";
 import { setLang } from "./i18n";
 import { LabelerOptIn } from "./LabelerOptIn";
 
@@ -9,6 +9,8 @@ const LABELER = {
   did: "did:plc:labeler",
   handle: "spooktober-labeler.test",
 };
+
+afterEach(() => setLang("en"));
 
 describe("LabelerOptIn", () => {
   it("explains how to opt in and links to the labeler", async () => {
@@ -33,11 +35,35 @@ describe("LabelerOptIn", () => {
       <LabelerOptIn load={async () => ({ ...LABELER, optedInVia: null })} />
     ));
 
-    expect(await screen.findByText("🎃 Gruseliges Profilbild")).toHaveAttribute(
-      "title",
-      "Hat im Spooktober das Profilbild geändert.",
+    for (const def of LABEL_DEFINITIONS) {
+      const german = def.locales.find((l) => l.lang === "de")!;
+      expect(await screen.findByTitle(german.description)).toHaveTextContent(
+        german.name,
+      );
+    }
+  });
+
+  it("notices a withdrawn opt-in without a reload", async () => {
+    let via: string | null = "follow";
+    const onStatus = vi.fn();
+    render(() => (
+      <LabelerOptIn
+        load={async () => ({ ...LABELER, optedInVia: via })}
+        refreshMs={20}
+        waitingRefreshMs={20}
+        onStatus={onStatus}
+      />
+    ));
+    expect(await screen.findByText(/You're in/)).toBeInTheDocument();
+
+    via = null;
+
+    expect(
+      await screen.findByText("🎃 Get your Spooktober labels"),
+    ).toBeInTheDocument();
+    expect(onStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ optedInVia: null }),
     );
-    setLang("en");
   });
 
   it("confirms an existing opt-in", async () => {
@@ -45,27 +71,31 @@ describe("LabelerOptIn", () => {
       <LabelerOptIn load={async () => ({ ...LABELER, optedInVia: "follow" })} />
     ));
 
+    expect(await screen.findByText(/You're in/)).toBeInTheDocument();
     expect(
-      await screen.findByText(/you follow the labeler/),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: "@spooktober-labeler.test" }),
+    ).toHaveAttribute(
+      "href",
+      "https://bsky.app/profile/spooktober-labeler.test",
+    );
   });
 
-  it("switches to the confirmation after checking again", async () => {
-    const refresh = vi.fn(async (): Promise<LabelerStatus> => ({
-      ...LABELER,
-      optedInVia: "like",
-    }));
+  it("switches to the confirmation as soon as the opt-in arrives", async () => {
+    let via: string | null = null;
     render(() => (
       <LabelerOptIn
-        load={async () => ({ ...LABELER, optedInVia: null })}
-        refresh={refresh}
+        load={async () => ({ ...LABELER, optedInVia: via })}
+        waitingRefreshMs={10}
       />
     ));
+    expect(
+      await screen.findByText("🎃 Get your Spooktober labels"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
 
-    fireEvent.click(await screen.findByText("Done - check again"));
+    via = "like";
 
-    expect(await screen.findByText(/you like the labeler/)).toBeInTheDocument();
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/You're in/)).toBeInTheDocument();
   });
 
   it("renders nothing when the backend runs no labeler", async () => {

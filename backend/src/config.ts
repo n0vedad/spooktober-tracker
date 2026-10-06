@@ -132,6 +132,10 @@ export const getCorsConfig = (): { allowAll: boolean; origins: string[] } => {
 export const JETSTREAM_URL =
   optionalEnv("JETSTREAM_URL") ?? "https://jetstream.us-east.bsky.network";
 
+// Spacedust link firehose (microcosm.blue) for instant labeler opt-ins.
+export const SPACEDUST_URL =
+  optionalEnv("SPACEDUST_URL") ?? "wss://spacedust.microcosm.blue";
+
 // Public origin of this backend (OAuth client_id/redirect_uri are derived from it).
 // Defaults to the loopback address, which makes the OAuth client a public
 // "localhost" client that needs no key or hosted metadata (development only).

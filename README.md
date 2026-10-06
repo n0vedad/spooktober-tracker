@@ -79,15 +79,21 @@ The backend also runs a Bluesky labeler as `@spooktober-labeler.katerstrophal.wo
 
 - `GET /xrpc/com.atproto.label.queryLabels` and the WebSocket stream `/xrpc/com.atproto.label.subscribeLabels`
 - Labels: `spooky-name`, `spooky-avatar`, `spooky-handle` on the account, only during October, expiring on November 1
-- Opt-in required: only accounts that **like or follow** the labeler are labeled (polled every 2 minutes). Withdrawing retracts their labels; opting in also labels earlier changes of the season and precomputes the account's bubble.
+- Opt-in required: only accounts that **like or follow** the labeler are labeled. New likes/follows arrive within seconds via [Spacedust](https://microcosm.blue) (a link firehose filtered by target), withdrawals via a small Jetstream connection limited to the opted-in accounts; a poll every 2 minutes covers outages of either. Withdrawing retracts their labels; opting in also labels earlier changes of the season and precomputes the account's bubble.
 - Enabled when `LABELER_DID` and `LABELER_SIGNING_KEY` are set
 
-Setup by the account owner (publishes the label definitions and the profile description explaining the opt-in, both defined in `backend/src/labeler/policy.ts`, and adds the signing key and endpoint to the DID document; needs the account's main password, plus an emailed code when the DID document changes):
+Setup by the account owner (publishes the label definitions and the profile description explaining the opt-in, both defined in `shared/labels.ts`, and adds the signing key and endpoint to the DID document; needs the account's main password, plus an emailed code when the DID document changes):
 
 ```
 pnpm labeler-setup                 # republish label definitions, keep the key
 pnpm labeler-setup <did:key>       # first setup or key rotation
+pnpm prod-labeler-key              # new production key (rotation): { privateKeyHex, didKey }
+pnpm test-labeler-key              # signing key for local testing: { privateKeyHex, didKey }
 ```
+
+Key rotation: `pnpm prod-labeler-key`, store its `privateKeyHex` as `LABELER_SIGNING_KEY` in Railway, then `pnpm labeler-setup <didKey>`. Until both are done, apps reject the labels.
+
+Local testing: put `LABELER_DID` and the `privateKeyHex` of a separate key from `pnpm test-labeler-key` into `backend/.env`. Local labels stay in the local database (apps query the endpoint in the DID document). Never pass that test key's `didKey` to `pnpm labeler-setup`: it would replace the production key.
 
 ## Deployment (Railway)
 
@@ -96,7 +102,7 @@ The Railway project is defined in `.railway/railway.ts` (Infrastructure as Code)
 ```
 railway config plan     # preview
 OAUTH_PRIVATE_KEY_JWK="$(pnpm --silent --filter backend gen-key)" railway config apply   # first apply
-LABELER_SIGNING_KEY=<privateKeyHex from pnpm --filter backend labeler-key> railway config apply   # add the labeler key
+LABELER_SIGNING_KEY=<privateKeyHex from pnpm prod-labeler-key> railway config apply   # add the labeler key
 railway config apply    # later applies keep the stored key
 ```
 

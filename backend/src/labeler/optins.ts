@@ -93,8 +93,12 @@ export interface OptInSyncDeps {
   getOptIns: () => Promise<Map<string, string>>;
   saveOptIn: (did: string, via: string) => Promise<void>;
   removeOptIn: (did: string) => Promise<void>;
+  // Accounts that deleted their data or were excluded are never opted in
+  isIgnored?: (did: string) => Promise<boolean>;
   // Called for every new opt-in (e.g. to precompute the account's bubble)
   onNewOptIn?: (did: string) => void;
+  // Called after every completed pass (e.g. to watch the new opt-ins)
+  onSynced?: () => void;
   log?: Pick<Console, "log" | "warn" | "error">;
 }
 
@@ -135,6 +139,7 @@ export function createOptInSync(deps: OptInSyncDeps) {
     for (const [did, via] of current) {
       const before = previous.get(did);
       if (before === via) continue;
+      if (before === undefined && (await deps.isIgnored?.(did))) continue;
       await deps.saveOptIn(did, via);
       if (before === undefined) {
         log.log(`🎃 Opt-in (${via}): ${did}`);
@@ -148,6 +153,7 @@ export function createOptInSync(deps: OptInSyncDeps) {
       await deps.removeOptIn(did);
       await deps.labeler.onOptOut(did);
     }
+    deps.onSynced?.();
   }
 
   /**
@@ -159,16 +165,6 @@ export function createOptInSync(deps: OptInSyncDeps) {
       lastSyncAt = Date.now();
     });
     return running;
-  }
-
-  /**
-   * Sync unless the last pass is younger than `minAgeMs` (on-demand checks
-   * from users must not hammer the AppView).
-   */
-  function syncIfStale(minAgeMs: number): Promise<void> {
-    if (!running && Date.now() - lastSyncAt < minAgeMs)
-      return Promise.resolve();
-    return sync();
   }
 
   function start(intervalMs: number) {
@@ -184,5 +180,5 @@ export function createOptInSync(deps: OptInSyncDeps) {
     timer = null;
   }
 
-  return { sync, syncIfStale, start, stop };
+  return { sync, start, stop };
 }
